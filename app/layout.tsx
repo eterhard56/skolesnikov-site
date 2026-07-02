@@ -1,9 +1,6 @@
 import { Syne, Inter, JetBrains_Mono } from "next/font/google";
 import "lenis/dist/lenis.css";
 import "./globals.css";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
-import { SmoothScrollProvider } from "@/components/providers/SmoothScrollProvider";
 import { siteConfig } from "@/lib/data/content";
 
 const display = Syne({
@@ -46,13 +43,7 @@ export default function RootLayout({
       lang="ru"
       className={`${display.variable} ${sans.variable} ${mono.variable}`}
     >
-      <body className="font-sans">
-        <SmoothScrollProvider>
-          <Navbar />
-          {children}
-          <Footer />
-        </SmoothScrollProvider>
-      </body>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }
