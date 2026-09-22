@@ -1,0 +1,92 @@
+"use client";
+
+import { motion, AnimatePresence } from "framer-motion";
+import { formatArea, formatInt, formatMoney } from "@/lib/uchet/calc";
+import { useUchet } from "@/lib/uchet/store";
+
+export function LiveTotalsBar() {
+  const { totals, state, ready } = useUchet();
+
+  if (!ready) return null;
+
+  return (
+    <motion.aside
+      initial={{ y: 40, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      className="uchet-totals fixed inset-x-0 bottom-0 z-40 border-t border-uchet-line/80 bg-uchet-ink/95 text-uchet-paper backdrop-blur-xl"
+      style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+    >
+      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:px-6">
+        <div className="grid flex-1 grid-cols-3 gap-2 text-center sm:text-left">
+          <Stat
+            label="м²"
+            value={formatArea(totals.area)}
+            hint={`${formatMoney(totals.fromArea)}`}
+          />
+          <Stat
+            label="сетки"
+            value={formatInt(totals.nets)}
+            hint={`${formatMoney(totals.fromNets)}`}
+          />
+          <Stat
+            label="замки"
+            value={formatInt(totals.locks)}
+            hint={`${formatMoney(totals.fromLocks)}`}
+          />
+        </div>
+
+        <div className="flex items-baseline justify-between gap-3 border-t border-white/10 pt-3 sm:block sm:border-0 sm:pt-0 sm:text-right">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-uchet-mist/70">
+            Итого · {totals.orderCount} зак.
+          </p>
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={totals.salary}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22 }}
+              className="font-display text-3xl font-semibold tracking-tight text-uchet-ember sm:text-4xl"
+            >
+              {formatMoney(totals.salary)}
+            </motion.p>
+          </AnimatePresence>
+          <p className="mt-0.5 hidden text-[11px] text-uchet-mist/55 sm:block">
+            {state.rates.sqm}₽/м² · {state.rates.lock}₽ замок · {state.rates.net}₽
+            сетка
+          </p>
+        </div>
+      </div>
+    </motion.aside>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-uchet-mist/55">
+        {label}
+      </p>
+      <AnimatePresence mode="wait">
+        <motion.p
+          key={value}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="font-display text-lg font-semibold tabular-nums text-white sm:text-xl"
+        >
+          {value}
+        </motion.p>
+      </AnimatePresence>
+      <p className="text-[11px] tabular-nums text-uchet-mist/45">{hint}</p>
+    </div>
+  );
+}

@@ -1,0 +1,51 @@
+/* ЦехУчёт — workshop ledger theme */
+
+.uchet-shell {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(15, 122, 122, 0.12), transparent 55%),
+    radial-gradient(900px 420px at 100% 0%, rgba(214, 69, 47, 0.06), transparent 50%),
+    linear-gradient(180deg, #f4f8fa 0%, #e8eef2 55%, #e3eaef 100%);
+  color: #102433;
+  font-family: var(--font-uchet-sans), system-ui, sans-serif;
+}
+
+.uchet-shell .font-display {
+  font-family: var(--font-uchet-display), var(--font-uchet-sans), system-ui, sans-serif;
+}
+
+.uchet-grid-bg {
+  background-image:
+    linear-gradient(rgba(16, 36, 51, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 36, 51, 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 85%);
+}
+
+.uchet-glow {
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 0%,
+    rgba(15, 122, 122, 0.14),
+    transparent 70%
+  );
+}
+
+.uchet-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid #d5e0e7;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.7rem 0.85rem;
+  font-size: 1rem;
+  color: #102433;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.uchet-input:focus {
+  border-color: rgba(15, 122, 122, 0.55);
+  box-shadow: 0 0 0 3px rgba(15, 122, 122, 0.12);
+}
+
+.uchet-input::placeholder {
+  color: rgba(95, 115, 131, 0.55);
+}

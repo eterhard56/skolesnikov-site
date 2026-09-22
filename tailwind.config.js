@@ -18,6 +18,17 @@ module.exports = {
           "accent-light": "#a89bff",
           glow: "#5eead4",
         },
+        uchet: {
+          ink: "#102433",
+          paper: "#eef3f6",
+          line: "#d5e0e7",
+          muted: "#5f7383",
+          teal: "#0f7a7a",
+          ember: "#d6452f",
+          amber: "#e8b14a",
+          "amber-ink": "#8a5a12",
+          mist: "#c8d6df",
+        },
       },
       fontFamily: {
         display: ["var(--font-display)", "system-ui", "sans-serif"],

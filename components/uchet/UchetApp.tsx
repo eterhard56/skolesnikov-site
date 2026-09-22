@@ -1,0 +1,178 @@
+"use client";
+
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  CalendarDays,
+  Users,
+  Settings2,
+} from "lucide-react";
+import type { UchetTab } from "@/lib/uchet/types";
+import { formatMonthTitle, shiftMonth } from "@/lib/uchet/months";
+import { useUchet } from "@/lib/uchet/store";
+import { OrderForm } from "./OrderForm";
+import { OrdersList } from "./OrdersList";
+import { AttendanceSheet } from "./AttendanceSheet";
+import { WorkersPanel } from "./WorkersPanel";
+import { RatesPanel } from "./RatesPanel";
+import { LiveTotalsBar } from "./LiveTotalsBar";
+
+const TABS: Array<{ id: UchetTab; label: string; icon: typeof ClipboardList }> = [
+  { id: "orders", label: "Заказы", icon: ClipboardList },
+  { id: "attendance", label: "Табель", icon: CalendarDays },
+  { id: "workers", label: "Рабочие", icon: Users },
+  { id: "rates", label: "Ставки", icon: Settings2 },
+];
+
+export function UchetApp() {
+  const { state, selectedWorker, setMonth, setWorker, ready } = useUchet();
+  const [tab, setTab] = useState<UchetTab>("orders");
+
+  return (
+    <div className="uchet-shell relative min-h-dvh pb-36">
+      <div className="uchet-grid-bg pointer-events-none absolute inset-0" aria-hidden />
+      <div className="uchet-glow pointer-events-none absolute inset-x-0 top-0 h-72" aria-hidden />
+
+      <header className="relative mx-auto max-w-3xl px-4 pb-2 pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-6 sm:pt-8">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+        >
+          <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-uchet-teal">
+            ПВХ · цех
+          </p>
+          <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight text-uchet-ink sm:text-5xl">
+            ЦехУчёт
+          </h1>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-uchet-muted sm:text-base">
+            Цифровая тетрадка: заказы, москитки, замки и табель. Итог зарплаты
+            считается сразу.
+          </p>
+        </motion.div>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+          <div className="flex flex-1 items-center gap-1 rounded-2xl border border-uchet-line bg-white/80 p-1.5 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() => setMonth(shiftMonth(state.selectedMonthKey, -1))}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-uchet-ink transition hover:bg-uchet-paper"
+              aria-label="Предыдущий месяц"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1 text-center">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-uchet-muted">
+                Месяц
+              </p>
+              <p className="truncate font-display text-base font-semibold text-uchet-ink">
+                {formatMonthTitle(state.selectedMonthKey)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMonth(shiftMonth(state.selectedMonthKey, 1))}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-uchet-ink transition hover:bg-uchet-paper"
+              aria-label="Следующий месяц"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+
+          <label className="flex flex-1 flex-col justify-center rounded-2xl border border-uchet-line bg-white/80 px-4 py-2 shadow-sm backdrop-blur">
+            <span className="text-[10px] uppercase tracking-[0.16em] text-uchet-muted">
+              Рабочий
+            </span>
+            <select
+              value={state.selectedWorkerId ?? ""}
+              onChange={(e) => setWorker(e.target.value)}
+              className="mt-0.5 w-full appearance-none bg-transparent font-display text-base font-semibold text-uchet-ink outline-none"
+              disabled={!ready || state.workers.length === 0}
+            >
+              {state.workers.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <nav
+          className="mt-5 flex gap-1 overflow-x-auto rounded-2xl border border-uchet-line bg-white/70 p-1.5 backdrop-blur"
+          aria-label="Разделы учёта"
+        >
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const active = tab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-[11px] font-semibold transition sm:flex-row sm:justify-center sm:gap-2 sm:text-sm ${
+                  active ? "text-uchet-ink" : "text-uchet-muted hover:text-uchet-ink"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="uchet-tab"
+                    className="absolute inset-0 rounded-xl bg-uchet-paper shadow-sm"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  />
+                )}
+                <Icon className="relative h-4 w-4" />
+                <span className="relative">{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+
+      <main className="relative mx-auto mt-5 max-w-3xl px-4 sm:px-6">
+        {!selectedWorker && tab !== "workers" ? (
+          <div className="rounded-2xl border border-dashed border-uchet-line bg-white/50 p-8 text-center">
+            <p className="font-display text-lg font-semibold text-uchet-ink">
+              Нет рабочих
+            </p>
+            <p className="mt-2 text-sm text-uchet-muted">
+              Добавьте хотя бы одного в разделе «Рабочие».
+            </p>
+            <button
+              type="button"
+              onClick={() => setTab("workers")}
+              className="mt-4 rounded-xl bg-uchet-ink px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              К рабочим
+            </button>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22 }}
+              className="space-y-4"
+            >
+              {tab === "orders" && (
+                <>
+                  <OrderForm />
+                  <OrdersList />
+                </>
+              )}
+              {tab === "attendance" && <AttendanceSheet />}
+              {tab === "workers" && <WorkersPanel />}
+              {tab === "rates" && <RatesPanel />}
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </main>
+
+      {tab === "orders" && <LiveTotalsBar />}
+    </div>
+  );
+}
