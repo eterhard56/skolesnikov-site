@@ -53,10 +53,19 @@ export function WorkersPanel() {
             placeholder="Имя рабочего"
             className="uchet-input flex-1"
             autoComplete="off"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (name.trim()) {
+                  addWorker(name);
+                  setName("");
+                }
+              }
+            }}
           />
           <button
             type="submit"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-uchet-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-uchet-ink/90"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-uchet-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-uchet-ink/90"
           >
             <Plus className="h-4 w-4" />
             Добавить
@@ -88,6 +97,16 @@ export function WorkersPanel() {
                     onChange={(e) => setEditName(e.target.value)}
                     className="uchet-input flex-1"
                     autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        renameWorker(worker.id, editName);
+                        setEditingId(null);
+                      }
+                      if (e.key === "Escape") {
+                        setEditingId(null);
+                      }
+                    }}
                   />
                   <button
                     type="button"
@@ -95,18 +114,18 @@ export function WorkersPanel() {
                       renameWorker(worker.id, editName);
                       setEditingId(null);
                     }}
-                    className="rounded-lg p-2 text-uchet-teal hover:bg-uchet-teal/10"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-uchet-teal hover:bg-uchet-teal/10"
                     aria-label="Сохранить"
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="h-5 w-5" />
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditingId(null)}
-                    className="rounded-lg p-2 text-uchet-muted hover:bg-uchet-paper"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-uchet-muted hover:bg-uchet-paper"
                     aria-label="Отмена"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-5 w-5" />
                   </button>
                 </>
               ) : (
@@ -130,7 +149,7 @@ export function WorkersPanel() {
                       setEditingId(worker.id);
                       setEditName(worker.name);
                     }}
-                    className="rounded-lg p-2 text-uchet-muted hover:bg-uchet-paper hover:text-uchet-ink"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-uchet-muted hover:bg-uchet-paper hover:text-uchet-ink"
                     aria-label="Переименовать"
                   >
                     <Pencil className="h-4 w-4" />
@@ -146,7 +165,7 @@ export function WorkersPanel() {
                         removeWorker(worker.id);
                       }
                     }}
-                    className="rounded-lg p-2 text-uchet-muted hover:bg-uchet-ember/10 hover:text-uchet-ember"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl text-uchet-muted hover:bg-uchet-ember/10 hover:text-uchet-ember"
                     aria-label="Удалить"
                   >
                     <Trash2 className="h-4 w-4" />
