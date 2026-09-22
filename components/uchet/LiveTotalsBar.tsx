@@ -5,7 +5,7 @@ import { formatArea, formatInt, formatMoney } from "@/lib/uchet/calc";
 import { useUchet } from "@/lib/uchet/store";
 
 export function LiveTotalsBar() {
-  const { totals, state, ready } = useUchet();
+  const { totals, state, monthHours, monthRubPerHour, ready } = useUchet();
 
   if (!ready) return null;
 
@@ -18,21 +18,26 @@ export function LiveTotalsBar() {
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6 sm:px-6">
-        <div className="grid flex-1 grid-cols-3 gap-2 text-center sm:text-left">
+        <div className="grid flex-1 grid-cols-4 gap-2 text-center sm:text-left">
           <Stat
             label="м²"
             value={formatArea(totals.area)}
-            hint={`${formatMoney(totals.fromArea)}`}
+            hint={formatMoney(totals.fromArea)}
           />
           <Stat
             label="сетки"
             value={formatInt(totals.nets)}
-            hint={`${formatMoney(totals.fromNets)}`}
+            hint={formatMoney(totals.fromNets)}
           />
           <Stat
             label="замки"
             value={formatInt(totals.locks)}
-            hint={`${formatMoney(totals.fromLocks)}`}
+            hint={formatMoney(totals.fromLocks)}
+          />
+          <Stat
+            label="₽/час"
+            value={monthHours > 0 ? formatMoney(monthRubPerHour) : "—"}
+            hint={monthHours > 0 ? `${formatArea(monthHours)} ч` : "нет часов"}
           />
         </div>
 
@@ -81,12 +86,14 @@ function Stat({
           key={value}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          className="font-display text-lg font-semibold tabular-nums text-white sm:text-xl"
+          className="font-display text-base font-semibold tabular-nums text-white sm:text-lg"
         >
           {value}
         </motion.p>
       </AnimatePresence>
-      <p className="text-[11px] tabular-nums text-uchet-mist/45">{hint}</p>
+      <p className="text-[10px] tabular-nums text-uchet-mist/45 sm:text-[11px]">
+        {hint}
+      </p>
     </div>
   );
 }

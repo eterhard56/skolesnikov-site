@@ -44,7 +44,7 @@ export function WorkersPanel() {
           Рабочие
         </p>
         <p className="mt-0.5 text-sm text-uchet-muted">
-          У каждого своя тетрадка заказов и табель за месяц
+          Добавьте своих — у каждого заказы, табель с часами и ₽/час
         </p>
         <div className="mt-4 flex gap-2">
           <input

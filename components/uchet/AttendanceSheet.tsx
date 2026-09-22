@@ -1,6 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react";
 import {
   dateKey,
   daysInMonth,
@@ -9,60 +11,56 @@ import {
   todayKey,
   weekdayIndex,
 } from "@/lib/uchet/months";
-import type { AttendanceStatus } from "@/lib/uchet/types";
+import { formatArea } from "@/lib/uchet/calc";
 import { useUchet } from "@/lib/uchet/store";
+import { DEFAULT_SHIFT_HOURS } from "@/lib/uchet/types";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-
-const CYCLE: Array<AttendanceStatus | null> = [
-  null,
-  "present",
-  "half",
-  "absent",
-  "off",
-];
-
-const STATUS_STYLE: Record<
-  AttendanceStatus,
-  { label: string; className: string }
-> = {
-  present: {
-    label: "Я",
-    className: "bg-uchet-teal text-white border-uchet-teal",
-  },
-  half: {
-    label: "½",
-    className: "bg-uchet-amber/90 text-uchet-ink border-uchet-amber",
-  },
-  absent: {
-    label: "Н",
-    className: "bg-uchet-ember/90 text-white border-uchet-ember",
-  },
-  off: {
-    label: "В",
-    className: "bg-uchet-ink/80 text-white border-uchet-ink",
-  },
-};
+const QUICK = [4, 6, 8, 10, 12];
 
 export function AttendanceSheet() {
   const {
     state,
     selectedWorker,
-    getAttendance,
-    setAttendance,
-    attendanceStats,
+    getDayHours,
+    setDayHours,
+    monthHours,
   } = useUchet();
+  const [editingDay, setEditingDay] = useState<number | null>(null);
+  const [hoursDraft, setHoursDraft] = useState("");
 
   const days = daysInMonth(state.selectedMonthKey);
   const startPad = weekdayIndex(state.selectedMonthKey, 1);
   const today = todayKey();
 
-  function cycleDay(day: number) {
+  useEffect(() => {
+    setEditingDay(null);
+  }, [state.selectedMonthKey, state.selectedWorkerId]);
+
+  function openDay(day: number) {
     const key = dateKey(state.selectedMonthKey, day);
-    const current = getAttendance(key);
-    const idx = CYCLE.indexOf(current);
-    const next = CYCLE[(idx + 1) % CYCLE.length];
-    setAttendance(key, next);
+    const current = getDayHours(key);
+    setEditingDay(day);
+    setHoursDraft(current != null ? String(current) : String(DEFAULT_SHIFT_HOURS));
+  }
+
+  function saveHours(raw?: string) {
+    if (editingDay === null) return;
+    const key = dateKey(state.selectedMonthKey, editingDay);
+    const value = parseFloat((raw ?? hoursDraft).replace(",", "."));
+    if (!Number.isFinite(value) || value <= 0) {
+      setDayHours(key, null);
+    } else {
+      setDayHours(key, value);
+    }
+    setEditingDay(null);
+  }
+
+  function clearHours() {
+    if (editingDay === null) return;
+    const key = dateKey(state.selectedMonthKey, editingDay);
+    setDayHours(key, null);
+    setEditingDay(null);
   }
 
   if (!selectedWorker) {
@@ -82,15 +80,17 @@ export function AttendanceSheet() {
               Табель · {selectedWorker.name}
             </p>
             <p className="mt-0.5 text-sm text-uchet-muted">
-              {formatMonthTitle(state.selectedMonthKey)} — нажимайте день, чтобы
-              отметить
+              {formatMonthTitle(state.selectedMonthKey)} — нажмите день и укажите
+              часы
             </p>
           </div>
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            <Legend swatch="bg-uchet-teal" label="Явка" />
-            <Legend swatch="bg-uchet-amber" label="Полдня" />
-            <Legend swatch="bg-uchet-ember" label="Неявка" />
-            <Legend swatch="bg-uchet-ink/80" label="Выходной" />
+          <div className="rounded-xl bg-uchet-teal/10 px-3 py-2 text-right">
+            <p className="text-[10px] uppercase tracking-wider text-uchet-teal">
+              часов за месяц
+            </p>
+            <p className="font-display text-xl font-semibold tabular-nums text-uchet-teal">
+              {formatArea(monthHours)}
+            </p>
           </div>
         </div>
 
@@ -111,29 +111,36 @@ export function AttendanceSheet() {
           {Array.from({ length: days }, (_, i) => {
             const day = i + 1;
             const key = dateKey(state.selectedMonthKey, day);
-            const status = getAttendance(key);
+            const hours = getDayHours(key);
             const weekend = isWeekend(state.selectedMonthKey, day);
             const isToday = key === today;
-            const style = status ? STATUS_STYLE[status] : null;
+            const active = editingDay === day;
+            const worked = hours != null && hours > 0;
 
             return (
               <motion.button
                 key={key}
                 type="button"
                 whileTap={{ scale: 0.94 }}
-                onClick={() => cycleDay(day)}
+                onClick={() => openDay(day)}
                 className={`relative flex aspect-square flex-col items-center justify-center rounded-xl border text-sm font-semibold transition ${
-                  style
-                    ? style.className
-                    : weekend
-                      ? "border-uchet-line/80 bg-uchet-paper/60 text-uchet-muted"
-                      : "border-uchet-line bg-white text-uchet-ink hover:border-uchet-teal/40"
-                } ${isToday && !status ? "ring-2 ring-uchet-teal/40" : ""}`}
-                aria-label={`День ${day}${status ? `, ${STATUS_STYLE[status].label}` : ""}`}
+                  active
+                    ? "border-uchet-teal bg-uchet-teal text-white ring-2 ring-uchet-teal/30"
+                    : worked
+                      ? "border-uchet-teal/50 bg-uchet-teal/15 text-uchet-ink"
+                      : weekend
+                        ? "border-uchet-line/80 bg-uchet-paper/60 text-uchet-muted"
+                        : "border-uchet-line bg-white text-uchet-ink hover:border-uchet-teal/40"
+                } ${isToday && !worked && !active ? "ring-2 ring-uchet-teal/30" : ""}`}
+                aria-label={
+                  hours
+                    ? `День ${day}, ${hours} ч`
+                    : `День ${day}, часы не указаны`
+                }
               >
-                <span className="text-[11px] opacity-70">{day}</span>
-                <span className="font-display text-sm leading-none">
-                  {style?.label ?? (weekend ? "·" : "")}
+                <span className="text-[10px] opacity-70">{day}</span>
+                <span className="font-display text-sm leading-none tabular-nums">
+                  {worked ? hours : weekend ? "·" : ""}
                 </span>
               </motion.button>
             );
@@ -141,48 +148,99 @@ export function AttendanceSheet() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Явок" value={attendanceStats.present} tone="teal" />
-        <StatCard label="Полдня" value={attendanceStats.half} tone="amber" />
-        <StatCard label="Неявок" value={attendanceStats.absent} tone="ember" />
-        <StatCard label="Выходных" value={attendanceStats.off} tone="ink" />
+      <AnimatePresence>
+        {editingDay !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="rounded-2xl border border-uchet-teal/30 bg-white p-4 shadow-lg sm:p-5"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="font-display text-base font-semibold text-uchet-ink">
+                {editingDay}{" "}
+                {formatMonthTitle(state.selectedMonthKey).split(" ")[0].toLowerCase()}{" "}
+                — часы
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditingDay(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-uchet-muted hover:bg-uchet-paper"
+                aria-label="Закрыть"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={hoursDraft}
+                onChange={(e) => setHoursDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveHours();
+                }}
+                inputMode="decimal"
+                autoFocus
+                className="uchet-input flex-1 font-display text-lg font-semibold tabular-nums"
+                placeholder="8"
+              />
+              <button
+                type="button"
+                onClick={() => saveHours()}
+                className="rounded-xl bg-uchet-ink px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                Сохранить
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {QUICK.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => {
+                    setHoursDraft(String(h));
+                    saveHours(String(h));
+                  }}
+                  className="rounded-lg border border-uchet-line bg-uchet-paper px-3 py-2 text-sm font-semibold tabular-nums text-uchet-ink hover:border-uchet-teal/40"
+                >
+                  {h} ч
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={clearHours}
+                className="rounded-lg border border-uchet-ember/25 px-3 py-2 text-sm font-medium text-uchet-ember hover:bg-uchet-ember/5"
+              >
+                Очистить
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-uchet-line bg-white/70 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-uchet-muted">
+            Дней с часами
+          </p>
+          <p className="font-display text-2xl font-semibold tabular-nums text-uchet-ink">
+            {
+              Array.from({ length: days }, (_, i) =>
+                getDayHours(dateKey(state.selectedMonthKey, i + 1))
+              ).filter((h) => h != null && h > 0).length
+            }
+          </p>
+        </div>
+        <div className="rounded-xl border border-uchet-line bg-white/70 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-uchet-muted">
+            Всего часов
+          </p>
+          <p className="font-display text-2xl font-semibold tabular-nums text-uchet-teal">
+            {formatArea(monthHours)} ч
+          </p>
+        </div>
       </div>
-    </div>
-  );
-}
-
-function Legend({ swatch, label }: { swatch: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-uchet-muted">
-      <span className={`h-2.5 w-2.5 rounded-sm ${swatch}`} />
-      {label}
-    </span>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "teal" | "amber" | "ember" | "ink";
-}) {
-  const tones = {
-    teal: "text-uchet-teal",
-    amber: "text-uchet-amber-ink",
-    ember: "text-uchet-ember",
-    ink: "text-uchet-ink",
-  };
-  return (
-    <div className="rounded-xl border border-uchet-line bg-white/70 px-3 py-3">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-uchet-muted">
-        {label}
-      </p>
-      <p className={`font-display text-2xl font-semibold tabular-nums ${tones[tone]}`}>
-        {value}
-      </p>
     </div>
   );
 }

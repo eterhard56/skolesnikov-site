@@ -49,3 +49,25 @@
 .uchet-input::placeholder {
   color: rgba(95, 115, 131, 0.55);
 }
+
+.uchet-cell-input {
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.9375rem;
+  color: #102433;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.uchet-cell-input:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #d5e0e7;
+}
+
+.uchet-cell-input:focus {
+  background: #fff;
+  border-color: rgba(15, 122, 122, 0.5);
+  box-shadow: 0 0 0 2px rgba(15, 122, 122, 0.12);
+}

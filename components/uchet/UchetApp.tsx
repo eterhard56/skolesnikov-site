@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ClipboardList,
   CalendarDays,
+  Wallet,
   Users,
   Settings2,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { useUchet } from "@/lib/uchet/store";
 import { OrderForm } from "./OrderForm";
 import { OrdersList } from "./OrdersList";
 import { AttendanceSheet } from "./AttendanceSheet";
+import { SalaryPanel } from "./SalaryPanel";
 import { WorkersPanel } from "./WorkersPanel";
 import { RatesPanel } from "./RatesPanel";
 import { LiveTotalsBar } from "./LiveTotalsBar";
@@ -23,6 +25,7 @@ import { LiveTotalsBar } from "./LiveTotalsBar";
 const TABS: Array<{ id: UchetTab; label: string; icon: typeof ClipboardList }> = [
   { id: "orders", label: "Заказы", icon: ClipboardList },
   { id: "attendance", label: "Табель", icon: CalendarDays },
+  { id: "salary", label: "Зарплата", icon: Wallet },
   { id: "workers", label: "Рабочие", icon: Users },
   { id: "rates", label: "Ставки", icon: Settings2 },
 ];
@@ -49,8 +52,7 @@ export function UchetApp() {
             ЦехУчёт
           </h1>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-uchet-muted sm:text-base">
-            Цифровая тетрадка: заказы, москитки, замки и табель. Итог зарплаты
-            считается сразу.
+            Заказы, табель с часами и зарплата: ₽/час = сумма работ ÷ часы.
           </p>
         </motion.div>
 
@@ -92,11 +94,15 @@ export function UchetApp() {
               className="mt-0.5 w-full appearance-none bg-transparent font-display text-base font-semibold text-uchet-ink outline-none"
               disabled={!ready || state.workers.length === 0}
             >
-              {state.workers.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
+              {state.workers.length === 0 ? (
+                <option value="">Добавьте рабочего</option>
+              ) : (
+                state.workers.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))
+              )}
             </select>
           </label>
         </div>
@@ -112,7 +118,7 @@ export function UchetApp() {
                 key={id}
                 type="button"
                 onClick={() => setTab(id)}
-                className={`relative flex min-w-[4.5rem] flex-1 flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-[11px] font-semibold transition sm:flex-row sm:justify-center sm:gap-2 sm:text-sm ${
+                className={`relative flex min-w-[4.25rem] flex-1 flex-col items-center gap-1 rounded-xl px-1.5 py-2.5 text-[10px] font-semibold transition sm:min-w-0 sm:flex-row sm:justify-center sm:gap-1.5 sm:px-2 sm:text-sm ${
                   active ? "text-uchet-ink" : "text-uchet-muted hover:text-uchet-ink"
                 }`}
               >
@@ -123,8 +129,8 @@ export function UchetApp() {
                     transition={{ type: "spring", stiffness: 380, damping: 32 }}
                   />
                 )}
-                <Icon className="relative h-4 w-4" />
-                <span className="relative">{label}</span>
+                <Icon className="relative h-4 w-4 shrink-0" />
+                <span className="relative whitespace-nowrap">{label}</span>
               </button>
             );
           })}
@@ -132,13 +138,14 @@ export function UchetApp() {
       </header>
 
       <main className="relative mx-auto mt-5 max-w-3xl px-4 sm:px-6">
-        {!selectedWorker && tab !== "workers" ? (
+        {!selectedWorker && tab !== "workers" && tab !== "rates" ? (
           <div className="rounded-2xl border border-dashed border-uchet-line bg-white/50 p-8 text-center">
             <p className="font-display text-lg font-semibold text-uchet-ink">
-              Нет рабочих
+              Добавьте рабочих
             </p>
             <p className="mt-2 text-sm text-uchet-muted">
-              Добавьте хотя бы одного в разделе «Рабочие».
+              Сначала создайте рабочих — у каждого будут свои заказы, табель и
+              зарплата.
             </p>
             <button
               type="button"
@@ -165,6 +172,7 @@ export function UchetApp() {
                 </>
               )}
               {tab === "attendance" && <AttendanceSheet />}
+              {tab === "salary" && <SalaryPanel />}
               {tab === "workers" && <WorkersPanel />}
               {tab === "rates" && <RatesPanel />}
             </motion.div>
@@ -172,7 +180,9 @@ export function UchetApp() {
         )}
       </main>
 
-      {tab === "orders" && <LiveTotalsBar />}
+      {(tab === "orders" || tab === "salary") && selectedWorker && (
+        <LiveTotalsBar />
+      )}
     </div>
   );
 }

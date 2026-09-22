@@ -1,6 +1,8 @@
 import {
   DEFAULT_RATES,
+  DEFAULT_SHIFT_HOURS,
   type AttendanceDay,
+  type AttendanceStatus,
   type Order,
   type Rates,
   type UchetState,
@@ -18,19 +20,13 @@ export function createId(prefix: string): string {
 }
 
 export function createInitialState(): UchetState {
-  const worker: Worker = {
-    id: createId("w"),
-    name: "Рабочий 1",
-    createdAt: new Date().toISOString(),
-  };
-
   return {
-    version: 1,
+    version: 2,
     rates: { ...DEFAULT_RATES },
-    workers: [worker],
+    workers: [],
     orders: [],
     attendance: [],
-    selectedWorkerId: worker.id,
+    selectedWorkerId: null,
     selectedMonthKey: currentMonthKey(),
   };
 }
@@ -41,7 +37,9 @@ export function loadState(): UchetState {
   try {
     const raw = localStorage.getItem(UCHET_STORAGE_KEY);
     if (!raw) return createInitialState();
-    const parsed = JSON.parse(raw) as Partial<UchetState>;
+    const parsed = JSON.parse(raw) as Partial<UchetState> & {
+      attendance?: Array<Partial<AttendanceDay> & { status?: AttendanceStatus }>;
+    };
     return normalizeState(parsed);
   } catch {
     return createInitialState();
@@ -53,38 +51,76 @@ export function saveState(state: UchetState): void {
   localStorage.setItem(UCHET_STORAGE_KEY, JSON.stringify(state));
 }
 
-function normalizeState(parsed: Partial<UchetState>): UchetState {
-  const base = createInitialState();
+function statusToHours(status: AttendanceStatus | undefined): number {
+  switch (status) {
+    case "present":
+      return DEFAULT_SHIFT_HOURS;
+    case "half":
+      return DEFAULT_SHIFT_HOURS / 2;
+    case "absent":
+    case "off":
+    default:
+      return 0;
+  }
+}
+
+function normalizeAttendance(
+  raw: Array<Partial<AttendanceDay> & { status?: AttendanceStatus }>
+): AttendanceDay[] {
+  const result: AttendanceDay[] = [];
+  for (const item of raw) {
+    if (typeof item.workerId !== "string" || typeof item.date !== "string") {
+      continue;
+    }
+    let hours =
+      typeof item.hours === "number" && Number.isFinite(item.hours)
+        ? item.hours
+        : statusToHours(item.status);
+    hours = Math.max(0, Math.min(24, Math.round(hours * 100) / 100));
+    if (hours <= 0) continue;
+    result.push({ workerId: item.workerId, date: item.date, hours });
+  }
+  return result;
+}
+
+function normalizeState(
+  parsed: Partial<UchetState> & {
+    attendance?: Array<Partial<AttendanceDay> & { status?: AttendanceStatus }>;
+  }
+): UchetState {
   const rates: Rates = {
     sqm: Number(parsed.rates?.sqm) || DEFAULT_RATES.sqm,
     lock: Number(parsed.rates?.lock) || DEFAULT_RATES.lock,
     net: Number(parsed.rates?.net) || DEFAULT_RATES.net,
   };
 
-  const workers = Array.isArray(parsed.workers) && parsed.workers.length > 0
+  const workers = Array.isArray(parsed.workers)
     ? parsed.workers.filter(isWorker)
-    : base.workers;
+    : [];
 
   const orders = Array.isArray(parsed.orders)
     ? parsed.orders.filter(isOrder)
     : [];
 
   const attendance = Array.isArray(parsed.attendance)
-    ? parsed.attendance.filter(isAttendance)
+    ? normalizeAttendance(parsed.attendance)
     : [];
 
   const selectedWorkerId =
-    workers.find((w) => w.id === parsed.selectedWorkerId)?.id ?? workers[0]?.id ?? null;
+    workers.find((w) => w.id === parsed.selectedWorkerId)?.id ??
+    workers[0]?.id ??
+    null;
 
   return {
-    version: 1,
+    version: 2,
     rates,
     workers,
     orders,
     attendance,
     selectedWorkerId,
     selectedMonthKey:
-      typeof parsed.selectedMonthKey === "string" && /^\d{4}-\d{2}$/.test(parsed.selectedMonthKey)
+      typeof parsed.selectedMonthKey === "string" &&
+      /^\d{4}-\d{2}$/.test(parsed.selectedMonthKey)
         ? parsed.selectedMonthKey
         : currentMonthKey(),
   };
@@ -107,16 +143,6 @@ function isOrder(v: unknown): v is Order {
     typeof o.area === "number" &&
     typeof o.nets === "number" &&
     typeof o.locks === "number"
-  );
-}
-
-function isAttendance(v: unknown): v is AttendanceDay {
-  if (!v || typeof v !== "object") return false;
-  const a = v as AttendanceDay;
-  return (
-    typeof a.workerId === "string" &&
-    typeof a.date === "string" &&
-    (a.status === "present" || a.status === "absent" || a.status === "half" || a.status === "off")
   );
 }
 

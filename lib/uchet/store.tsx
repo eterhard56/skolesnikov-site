@@ -11,6 +11,12 @@ import {
 } from "react";
 import { sumOrders, type Totals } from "./calc";
 import {
+  allWorkersSalary,
+  rubPerHour,
+  sumHours,
+  type WorkerSalary,
+} from "./salary";
+import {
   createId,
   createInitialState,
   loadState,
@@ -18,7 +24,6 @@ import {
 } from "./storage";
 import type {
   AttendanceDay,
-  AttendanceStatus,
   Order,
   Rates,
   UchetState,
@@ -31,6 +36,11 @@ interface UchetContextValue {
   filteredOrders: Order[];
   totals: Totals;
   selectedWorker: Worker | null;
+  /** Hours for selected worker in selected month */
+  monthHours: number;
+  /** ₽/час for selected worker */
+  monthRubPerHour: number;
+  workersSalary: WorkerSalary[];
   setMonth: (monthKey: string) => void;
   setWorker: (workerId: string) => void;
   addWorker: (name: string) => void;
@@ -43,11 +53,13 @@ interface UchetContextValue {
     locks: number;
     note?: string;
   }) => void;
-  updateOrder: (id: string, patch: Partial<Omit<Order, "id" | "createdAt">>) => void;
+  updateOrder: (
+    id: string,
+    patch: Partial<Omit<Order, "id" | "createdAt">>
+  ) => void;
   removeOrder: (id: string) => void;
-  setAttendance: (date: string, status: AttendanceStatus | null) => void;
-  getAttendance: (date: string) => AttendanceStatus | null;
-  attendanceStats: { present: number; half: number; absent: number; off: number };
+  setDayHours: (date: string, hours: number | null) => void;
+  getDayHours: (date: string) => number | null;
   updateRates: (rates: Rates) => void;
   replaceState: (next: UchetState) => void;
   resetAll: () => void;
@@ -81,7 +93,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
           o.workerId === state.selectedWorkerId &&
           o.monthKey === state.selectedMonthKey
       )
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }, [state.orders, state.selectedWorkerId, state.selectedMonthKey]);
 
   const totals = useMemo(
@@ -100,13 +112,33 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     );
   }, [state.attendance, state.selectedWorkerId, state.selectedMonthKey]);
 
-  const attendanceStats = useMemo(() => {
-    const stats = { present: 0, half: 0, absent: 0, off: 0 };
-    for (const day of attendanceForMonth) {
-      stats[day.status] += 1;
-    }
-    return stats;
-  }, [attendanceForMonth]);
+  const monthHours = useMemo(
+    () => sumHours(attendanceForMonth),
+    [attendanceForMonth]
+  );
+
+  const monthRubPerHour = useMemo(
+    () => rubPerHour(totals.salary, monthHours),
+    [totals.salary, monthHours]
+  );
+
+  const workersSalary = useMemo(
+    () =>
+      allWorkersSalary(
+        state.workers,
+        state.orders,
+        state.attendance,
+        state.rates,
+        state.selectedMonthKey
+      ),
+    [
+      state.workers,
+      state.orders,
+      state.attendance,
+      state.rates,
+      state.selectedMonthKey,
+    ]
+  );
 
   const value: UchetContextValue = {
     ready,
@@ -114,6 +146,9 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     filteredOrders,
     totals,
     selectedWorker,
+    monthHours,
+    monthRubPerHour,
+    workersSalary,
     setMonth: (monthKey) => update((s) => ({ ...s, selectedMonthKey: monthKey })),
     setWorker: (workerId) => update((s) => ({ ...s, selectedWorkerId: workerId })),
     addWorker: (name) =>
@@ -139,17 +174,15 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     removeWorker: (id) =>
       update((s) => {
         const workers = s.workers.filter((w) => w.id !== id);
-        if (workers.length === 0) {
-          const fallback = createInitialState();
-          return fallback;
-        }
         return {
           ...s,
           workers,
           orders: s.orders.filter((o) => o.workerId !== id),
           attendance: s.attendance.filter((a) => a.workerId !== id),
           selectedWorkerId:
-            s.selectedWorkerId === id ? workers[0].id : s.selectedWorkerId,
+            s.selectedWorkerId === id
+              ? workers[0]?.id ?? null
+              : s.selectedWorkerId,
         };
       }),
     addOrder: (input) =>
@@ -166,7 +199,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
           note: input.note?.trim() || undefined,
           createdAt: new Date().toISOString(),
         };
-        return { ...s, orders: [order, ...s.orders] };
+        return { ...s, orders: [...s.orders, order] };
       }),
     updateOrder: (id, patch) =>
       update((s) => ({
@@ -178,29 +211,30 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         ...s,
         orders: s.orders.filter((o) => o.id !== id),
       })),
-    setAttendance: (date, status) =>
+    setDayHours: (date, hours) =>
       update((s) => {
         if (!s.selectedWorkerId) return s;
         const rest = s.attendance.filter(
           (a) => !(a.workerId === s.selectedWorkerId && a.date === date)
         );
-        if (!status) return { ...s, attendance: rest };
+        if (hours === null || hours <= 0) {
+          return { ...s, attendance: rest };
+        }
+        const clamped = Math.max(0, Math.min(24, Math.round(hours * 100) / 100));
         const next: AttendanceDay = {
           workerId: s.selectedWorkerId,
           date,
-          status,
+          hours: clamped,
         };
         return { ...s, attendance: [...rest, next] };
       }),
-    getAttendance: (date) => {
+    getDayHours: (date) => {
       if (!state.selectedWorkerId) return null;
-      return (
-        state.attendance.find(
-          (a) => a.workerId === state.selectedWorkerId && a.date === date
-        )?.status ?? null
+      const day = state.attendance.find(
+        (a) => a.workerId === state.selectedWorkerId && a.date === date
       );
+      return day ? day.hours : null;
     },
-    attendanceStats,
     updateRates: (rates) => update((s) => ({ ...s, rates })),
     replaceState: (next) => setState(next),
     resetAll: () => setState(createInitialState()),

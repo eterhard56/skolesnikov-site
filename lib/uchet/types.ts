@@ -1,4 +1,9 @@
-export type UchetTab = "orders" | "attendance" | "workers" | "rates";
+export type UchetTab =
+  | "orders"
+  | "attendance"
+  | "salary"
+  | "workers"
+  | "rates";
 
 export interface Rates {
   sqm: number;
@@ -26,17 +31,19 @@ export interface Order {
   createdAt: string;
 }
 
+/** @deprecated kept for migration from older localStorage */
 export type AttendanceStatus = "present" | "absent" | "half" | "off";
 
 export interface AttendanceDay {
   workerId: string;
   /** YYYY-MM-DD */
   date: string;
-  status: AttendanceStatus;
+  /** Worked hours that day (0 = clear / not worked) */
+  hours: number;
 }
 
 export interface UchetState {
-  version: 1;
+  version: 2;
   rates: Rates;
   workers: Worker[];
   orders: Order[];
@@ -50,3 +57,6 @@ export const DEFAULT_RATES: Rates = {
   lock: 300,
   net: 150,
 };
+
+/** Default full shift when migrating old «явка» marks */
+export const DEFAULT_SHIFT_HOURS = 8;
