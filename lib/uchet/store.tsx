@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -22,6 +23,11 @@ import {
   loadState,
   saveState,
 } from "./storage";
+import {
+  fetchCloudState,
+  pushCloudState,
+  type SyncStatus,
+} from "./sync-client";
 import type {
   AttendanceDay,
   Order,
@@ -32,13 +38,13 @@ import type {
 
 interface UchetContextValue {
   ready: boolean;
+  syncStatus: SyncStatus;
+  syncError: string | null;
   state: UchetState;
   filteredOrders: Order[];
   totals: Totals;
   selectedWorker: Worker | null;
-  /** Hours for selected worker in selected month */
   monthHours: number;
-  /** ₽/час for selected worker */
   monthRubPerHour: number;
   workersSalary: WorkerSalary[];
   setMonth: (monthKey: string) => void;
@@ -63,23 +69,185 @@ interface UchetContextValue {
   updateRates: (rates: Rates) => void;
   replaceState: (next: UchetState) => void;
   resetAll: () => void;
+  refreshFromCloud: () => Promise<void>;
 }
 
 const UchetContext = createContext<UchetContextValue | null>(null);
 
+const SAVE_DEBOUNCE_MS = 700;
+const POLL_MS = 25_000;
+
+function stateFingerprint(state: UchetState): string {
+  // Ignore pure UI selection for equality against cloud if needed later;
+  // for now sync full state including selection.
+  return JSON.stringify(state);
+}
+
 export function UchetProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UchetState>(createInitialState);
   const [ready, setReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const skipNextSave = useRef(true);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudUpdatedAt = useRef<string | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const refreshFromCloud = useCallback(async () => {
+    try {
+      const remote = await fetchCloudState();
+      if (remote.state) {
+        skipNextSave.current = true;
+        setState(remote.state);
+        saveState(remote.state);
+        cloudUpdatedAt.current = remote.updatedAt;
+      }
+      setSyncStatus("saved");
+      setSyncError(null);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "error";
+      if (msg === "unauthorized") {
+        setSyncStatus("error");
+        setSyncError("Нужен вход");
+        return;
+      }
+      setSyncStatus("error");
+      setSyncError("Не удалось обновить с сервера");
+    }
+  }, []);
 
   useEffect(() => {
-    setState(loadState());
-    setReady(true);
+    let cancelled = false;
+
+    async function bootstrap() {
+      const local = loadState();
+      setState(local);
+      setSyncStatus("loading");
+
+      try {
+        const remote = await fetchCloudState();
+        if (cancelled) return;
+
+        if (remote.state) {
+          skipNextSave.current = true;
+          setState(remote.state);
+          saveState(remote.state);
+          cloudUpdatedAt.current = remote.updatedAt;
+          setSyncStatus("saved");
+          setSyncError(null);
+        } else if (
+          local.workers.length > 0 ||
+          local.orders.length > 0 ||
+          local.attendance.length > 0
+        ) {
+          // First cloud save: migrate local browser data up
+          setSyncStatus("saving");
+          const pushed = await pushCloudState(local);
+          if (cancelled) return;
+          cloudUpdatedAt.current = pushed.updatedAt;
+          setSyncStatus("saved");
+          setSyncError(null);
+        } else {
+          setSyncStatus("saved");
+          setSyncError(null);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        const msg = error instanceof Error ? error.message : "error";
+        setSyncStatus(msg === "unauthorized" ? "error" : "offline");
+        setSyncError(
+          msg === "unauthorized"
+            ? "Нужен вход"
+            : "Нет связи с сервером — правки пока только на этом телефоне"
+        );
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
     saveState(state);
+
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSyncStatus("saving");
+    setSyncError(null);
+
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const pushed = await pushCloudState(stateRef.current);
+        cloudUpdatedAt.current = pushed.updatedAt;
+        setSyncStatus("saved");
+        setSyncError(null);
+      } catch {
+        setSyncStatus("error");
+        setSyncError("Не удалось сохранить на сервер");
+      }
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, [state, ready]);
+
+  // Pull updates when tab becomes visible / periodically
+  useEffect(() => {
+    if (!ready) return;
+
+    async function pullIfNewer() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const remote = await fetchCloudState();
+        if (!remote.state || !remote.updatedAt) return;
+        if (
+          cloudUpdatedAt.current &&
+          remote.updatedAt <= cloudUpdatedAt.current
+        ) {
+          return;
+        }
+        if (stateFingerprint(remote.state) === stateFingerprint(stateRef.current)) {
+          cloudUpdatedAt.current = remote.updatedAt;
+          return;
+        }
+        skipNextSave.current = true;
+        setState(remote.state);
+        saveState(remote.state);
+        cloudUpdatedAt.current = remote.updatedAt;
+        setSyncStatus("saved");
+        setSyncError(null);
+      } catch {
+        // ignore poll errors
+      }
+    }
+
+    const onFocus = () => {
+      void pullIfNewer();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    const timer = setInterval(() => {
+      void pullIfNewer();
+    }, POLL_MS);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      clearInterval(timer);
+    };
+  }, [ready]);
 
   const update = useCallback((fn: (prev: UchetState) => UchetState) => {
     setState(fn);
@@ -142,6 +310,8 @@ export function UchetProvider({ children }: { children: ReactNode }) {
 
   const value: UchetContextValue = {
     ready,
+    syncStatus,
+    syncError,
     state,
     filteredOrders,
     totals,
@@ -238,6 +408,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     updateRates: (rates) => update((s) => ({ ...s, rates })),
     replaceState: (next) => setState(next),
     resetAll: () => setState(createInitialState()),
+    refreshFromCloud,
   };
 
   return (

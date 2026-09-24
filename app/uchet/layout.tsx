@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Manrope, Unbounded } from "next/font/google";
-import { UchetProvider } from "@/lib/uchet/store";
 import "./uchet.css";
 
 const display = Unbounded({
@@ -21,7 +20,7 @@ export const metadata: Metadata = {
     "Учёт заказов ПВХ-окон: квадраты, замки, москитные сетки и табель посещений. Итог зарплаты считается сразу.",
 };
 
-export default function UchetLayout({
+export default function UchetRootLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -30,7 +29,7 @@ export default function UchetLayout({
     <div
       className={`${display.variable} ${sans.variable} font-[family-name:var(--font-uchet-sans)]`}
     >
-      <UchetProvider>{children}</UchetProvider>
+      {children}
     </div>
   );
 }

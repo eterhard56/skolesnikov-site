@@ -23,6 +23,7 @@ import { SalaryPanel } from "./SalaryPanel";
 import { WorkersPanel } from "./WorkersPanel";
 import { RatesPanel } from "./RatesPanel";
 import { LiveTotalsBar } from "./LiveTotalsBar";
+import { SyncStatusBadge } from "./SyncStatusBadge";
 import { useRouter } from "next/navigation";
 
 const TABS: Array<{ id: UchetTab; label: string; icon: typeof ClipboardList }> = [
@@ -67,15 +68,18 @@ export function UchetApp() {
               Заказы, табель с часами и зарплата: ₽/час = сумма работ ÷ часы.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-uchet-line bg-white/80 px-3 py-2 text-xs font-semibold text-uchet-muted transition hover:border-uchet-ember/30 hover:text-uchet-ember"
-            aria-label="Выйти"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Выйти
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <SyncStatusBadge />
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-uchet-line bg-white/80 px-3 py-2 text-xs font-semibold text-uchet-muted transition hover:border-uchet-ember/30 hover:text-uchet-ember"
+              aria-label="Выйти"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Выйти
+            </button>
+          </div>
         </motion.div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">

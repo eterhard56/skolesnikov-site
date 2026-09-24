@@ -122,8 +122,8 @@ export function RatesPanel() {
           Резервная копия
         </p>
         <p className="mt-0.5 text-sm text-uchet-muted">
-          Данные хранятся в этом браузере. Экспортируйте JSON, чтобы не потерять
-          учёт.
+          Основные данные сохраняются на сервере и видны со всех телефонов.
+          JSON — дополнительная копия на всякий случай.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
