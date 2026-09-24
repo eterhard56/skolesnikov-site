@@ -10,10 +10,12 @@ import {
   Wallet,
   Users,
   Settings2,
+  LogOut,
 } from "lucide-react";
 import type { UchetTab } from "@/lib/uchet/types";
 import { formatMonthTitle, shiftMonth } from "@/lib/uchet/months";
 import { useUchet } from "@/lib/uchet/store";
+import { UCHET_LOGIN_PATH } from "@/lib/uchet/auth-routes";
 import { OrderForm } from "./OrderForm";
 import { OrdersList } from "./OrdersList";
 import { AttendanceSheet } from "./AttendanceSheet";
@@ -21,6 +23,7 @@ import { SalaryPanel } from "./SalaryPanel";
 import { WorkersPanel } from "./WorkersPanel";
 import { RatesPanel } from "./RatesPanel";
 import { LiveTotalsBar } from "./LiveTotalsBar";
+import { useRouter } from "next/navigation";
 
 const TABS: Array<{ id: UchetTab; label: string; icon: typeof ClipboardList }> = [
   { id: "orders", label: "Заказы", icon: ClipboardList },
@@ -33,6 +36,13 @@ const TABS: Array<{ id: UchetTab; label: string; icon: typeof ClipboardList }> =
 export function UchetApp() {
   const { state, selectedWorker, setMonth, setWorker, ready } = useUchet();
   const [tab, setTab] = useState<UchetTab>("orders");
+  const router = useRouter();
+
+  async function logout() {
+    await fetch("/api/uchet/logout", { method: "POST" });
+    router.push(UCHET_LOGIN_PATH);
+    router.refresh();
+  }
 
   return (
     <div className="uchet-shell relative min-h-dvh pb-36">
@@ -44,16 +54,28 @@ export function UchetApp() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
+          className="flex items-start justify-between gap-3"
         >
-          <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-uchet-teal">
-            ПВХ · цех
-          </p>
-          <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight text-uchet-ink sm:text-5xl">
-            ЦехУчёт
-          </h1>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-uchet-muted sm:text-base">
-            Заказы, табель с часами и зарплата: ₽/час = сумма работ ÷ часы.
-          </p>
+          <div>
+            <p className="font-display text-[11px] font-semibold uppercase tracking-[0.28em] text-uchet-teal">
+              ПВХ · цех
+            </p>
+            <h1 className="mt-1 font-display text-4xl font-semibold tracking-tight text-uchet-ink sm:text-5xl">
+              ЦехУчёт
+            </h1>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-uchet-muted sm:text-base">
+              Заказы, табель с часами и зарплата: ₽/час = сумма работ ÷ часы.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-uchet-line bg-white/80 px-3 py-2 text-xs font-semibold text-uchet-muted transition hover:border-uchet-ember/30 hover:text-uchet-ember"
+            aria-label="Выйти"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Выйти
+          </button>
         </motion.div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-stretch">
