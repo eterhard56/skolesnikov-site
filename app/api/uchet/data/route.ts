@@ -53,8 +53,12 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const state = importStateJson(JSON.stringify(body.state));
-    const payload = await writeCloudState(state);
+    const incoming = importStateJson(JSON.stringify(body.state));
+    const existing = await readCloudState();
+    // writeCloudState already merges; return merged payload
+    const payload = await writeCloudState(incoming);
+    // Prefer returning server merged state so clients catch up
+    void existing;
     return NextResponse.json(payload);
   } catch (error) {
     console.error("[uchet/data PUT]", error);

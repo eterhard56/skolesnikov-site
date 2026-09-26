@@ -53,6 +53,9 @@ export interface UchetState {
   attendance: AttendanceDay[];
   /** Direct month hour totals (override / manual entry) */
   monthHours: MonthHoursMap;
+  /** Tombstones so deletes survive multi-device merge */
+  removedOrderIds: string[];
+  removedWorkerIds: string[];
   selectedWorkerId: string | null;
   selectedMonthKey: string;
 }

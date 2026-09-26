@@ -3,6 +3,7 @@ import {
   createInitialState,
   importStateJson,
 } from "@/lib/uchet/storage";
+import { mergeUchetStates } from "@/lib/uchet/merge";
 import type { UchetState } from "@/lib/uchet/types";
 
 export const UCHET_BLOB_PATH = "uchet/state.json";
@@ -42,7 +43,6 @@ export async function readCloudState(): Promise<CloudPayload | null> {
       | UchetState
       | { state?: UchetState; updatedAt?: string };
 
-    // New format: { state, updatedAt }
     if (
       parsed &&
       typeof parsed === "object" &&
@@ -58,7 +58,6 @@ export async function readCloudState(): Promise<CloudPayload | null> {
       return withUpdatedAt(state, updatedAt);
     }
 
-    // Legacy: bare UchetState
     const state = importStateJson(raw);
     return withUpdatedAt(state, new Date(0).toISOString());
   } catch (error) {
@@ -71,7 +70,9 @@ export async function readCloudState(): Promise<CloudPayload | null> {
 }
 
 export async function writeCloudState(state: UchetState): Promise<CloudPayload> {
-  const payload = withUpdatedAt(state);
+  const existing = await readCloudState();
+  const merged = mergeUchetStates(existing?.state ?? null, state);
+  const payload = withUpdatedAt(merged);
   await put(UCHET_BLOB_PATH, JSON.stringify(payload), {
     access: "private",
     addRandomSuffix: false,

@@ -5,9 +5,27 @@ import { formatArea, formatInt, formatMoney } from "@/lib/uchet/calc";
 import { useUchet } from "@/lib/uchet/store";
 
 export function LiveTotalsBar() {
-  const { totals, state, monthHours, monthRubPerHour, ready } = useUchet();
+  const {
+    totals,
+    shopTotals,
+    shop,
+    state,
+    monthHours,
+    monthRubPerHour,
+    workerPay,
+    selectedWorker,
+    ready,
+  } = useUchet();
 
   if (!ready) return null;
+
+  // Orders tab: selected worker's orders. Salary: shop pool.
+  const showShop = true;
+  const display = showShop ? shopTotals : totals;
+  const hoursHint =
+    shop.totalHours > 0
+      ? `${formatArea(shop.totalHours)} ч цех`
+      : "нет часов";
 
   return (
     <motion.aside
@@ -21,40 +39,44 @@ export function LiveTotalsBar() {
         <div className="grid flex-1 grid-cols-4 gap-2 text-center sm:text-left">
           <Stat
             label="м²"
-            value={formatArea(totals.area)}
-            hint={formatMoney(totals.fromArea)}
+            value={formatArea(display.area)}
+            hint={formatMoney(display.fromArea)}
           />
           <Stat
             label="сетки"
-            value={formatInt(totals.nets)}
-            hint={formatMoney(totals.fromNets)}
+            value={formatInt(display.nets)}
+            hint={formatMoney(display.fromNets)}
           />
           <Stat
             label="замки"
-            value={formatInt(totals.locks)}
-            hint={formatMoney(totals.fromLocks)}
+            value={formatInt(display.locks)}
+            hint={formatMoney(display.fromLocks)}
           />
           <Stat
             label="₽/час"
-            value={monthHours > 0 ? formatMoney(monthRubPerHour) : "—"}
-            hint={monthHours > 0 ? `${formatArea(monthHours)} ч` : "нет часов"}
+            value={shop.totalHours > 0 ? formatMoney(monthRubPerHour) : "—"}
+            hint={
+              selectedWorker && monthHours > 0
+                ? `${formatArea(monthHours)} ч · ${formatMoney(workerPay)}`
+                : hoursHint
+            }
           />
         </div>
 
         <div className="flex items-baseline justify-between gap-3 border-t border-white/10 pt-3 sm:block sm:border-0 sm:pt-0 sm:text-right">
           <p className="text-[11px] uppercase tracking-[0.18em] text-uchet-mist/70">
-            Итого · {totals.orderCount} зак.
+            Работы цеха · {display.orderCount} зак.
           </p>
           <AnimatePresence mode="wait">
             <motion.p
-              key={totals.salary}
+              key={display.salary}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.22 }}
               className="font-display text-3xl font-semibold tracking-tight text-uchet-ember sm:text-4xl"
             >
-              {formatMoney(totals.salary)}
+              {formatMoney(display.salary)}
             </motion.p>
           </AnimatePresence>
           <p className="mt-0.5 hidden text-[11px] text-uchet-mist/55 sm:block">

@@ -9,17 +9,41 @@ export function SalaryPanel() {
   const {
     state,
     selectedWorker,
-    totals,
     monthHours,
     monthRubPerHour,
+    workerPay,
+    shop,
     workersSalary,
+    shopTotals,
     setWorker,
   } = useUchet();
 
   const monthTitle = formatMonthTitle(state.selectedMonthKey);
+  const selectedRow = workersSalary.find(
+    (w) => w.worker.id === selectedWorker?.id
+  );
 
   return (
     <div className="space-y-4">
+      <section className="rounded-2xl border border-uchet-line bg-white/80 p-4 sm:p-5">
+        <p className="font-display text-lg font-semibold text-uchet-ink">
+          Цех · {monthTitle}
+        </p>
+        <p className="mt-0.5 text-sm text-uchet-muted">
+          ₽/час общий: все работы ÷ все часы всех рабочих
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <InfoCard label="Работы цеха" value={formatMoney(shopTotals.salary)} />
+          <InfoCard label="Часы всех" value={`${formatArea(shop.totalHours)} ч`} />
+          <InfoCard
+            label="₽ / час"
+            value={shop.totalHours > 0 ? formatMoney(monthRubPerHour) : "—"}
+            accent
+          />
+          <InfoCard label="Заказов" value={String(shopTotals.orderCount)} />
+        </div>
+      </section>
+
       {selectedWorker && (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
@@ -36,20 +60,23 @@ export function SalaryPanel() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4 sm:px-6">
-            <Metric label="Работы" value={formatMoney(totals.salary)} />
+            <Metric
+              label="Его заказы"
+              value={formatMoney(selectedRow?.orderTotals.salary ?? 0)}
+            />
             <Metric label="Часы" value={`${formatArea(monthHours)} ч`} />
             <Metric
               label="₽ / час"
               value={
-                monthHours > 0 ? `${formatMoney(monthRubPerHour)}` : "—"
+                shop.totalHours > 0 ? `${formatMoney(monthRubPerHour)}` : "—"
               }
               accent
             />
-            <Metric label="Заказов" value={String(totals.orderCount)} />
+            <Metric label="К выплате" value={formatMoney(workerPay)} accent />
           </div>
 
           <div className="border-t border-white/10 bg-black/20 px-5 py-4 sm:px-6">
-            {monthHours > 0 ? (
+            {monthHours > 0 && shop.totalHours > 0 ? (
               <p className="font-display text-lg leading-snug sm:text-xl">
                 <span className="text-white">{selectedWorker.name}</span>
                 <span className="text-uchet-mist/70"> · </span>
@@ -62,16 +89,17 @@ export function SalaryPanel() {
                 </span>
                 <span className="text-uchet-mist/70"> = </span>
                 <span className="tabular-nums font-semibold text-uchet-ember">
-                  {formatMoney(totals.salary)}
+                  {formatMoney(workerPay)}
                 </span>
               </p>
             ) : (
               <p className="text-sm text-uchet-mist/75">
-                Укажите часы в табеле — появится рубль/час: сумма работ ÷ часы.
+                Нужны часы у рабочих и заказы за месяц — тогда появится общий
+                ₽/час и выплата каждому.
               </p>
             )}
             <p className="mt-2 text-[11px] text-uchet-mist/50">
-              ₽/час = итого по заказам ÷ отработанные часы
+              ₽/час = работы цеха ÷ сумма часов всех · зарплата = часы × ₽/час
             </p>
           </div>
         </motion.section>
@@ -82,7 +110,7 @@ export function SalaryPanel() {
           Все рабочие · {monthTitle}
         </p>
         <p className="mt-0.5 text-sm text-uchet-muted">
-          Сводка по цеху за месяц
+          У каждого свой ₽/час цеха × его часы
         </p>
 
         {workersSalary.length === 0 ? (
@@ -112,7 +140,8 @@ export function SalaryPanel() {
                         ) : null}
                       </p>
                       <p className="text-xs text-uchet-muted">
-                        {row.totals.orderCount} зак. · {formatArea(row.totals.area)} м²
+                        заказов: {row.orderTotals.orderCount} ·{" "}
+                        {formatArea(row.orderTotals.area)} м²
                       </p>
                     </div>
                     <div className="text-left sm:text-right">
@@ -124,7 +153,7 @@ export function SalaryPanel() {
                         <p className="text-xs text-uchet-muted">часы не указаны</p>
                       )}
                       <p className="font-display text-base font-semibold tabular-nums text-uchet-ember">
-                        {formatMoney(row.totals.salary)}
+                        {formatMoney(row.pay)}
                       </p>
                     </div>
                   </button>
@@ -134,6 +163,31 @@ export function SalaryPanel() {
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+function InfoCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-uchet-line bg-uchet-paper/60 px-3 py-3">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-uchet-muted">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 font-display text-lg font-semibold tabular-nums ${
+          accent ? "text-uchet-ember" : "text-uchet-ink"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

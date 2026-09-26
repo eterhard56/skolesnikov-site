@@ -16,10 +16,23 @@ import { monthHoursKey } from "./types";
 
 export interface WorkerSalary {
   worker: Worker;
-  totals: Totals;
+  /** Personal orders totals (for info) */
+  orderTotals: Totals;
   hours: number;
-  /** ₽ per hour = piecework / hours (0 if no hours) */
+  /** Shop-wide ₽/hour for the month */
   rubPerHour: number;
+  /** Pay = hours × shop ₽/hour */
+  pay: number;
+}
+
+export interface ShopSalary {
+  /** All orders in month (any worker) */
+  totals: Totals;
+  /** Sum of hours across all workers */
+  totalHours: number;
+  /** totals.salary / totalHours */
+  rubPerHour: number;
+  workers: WorkerSalary[];
 }
 
 export function sumHours(days: AttendanceDay[]): number {
@@ -52,6 +65,57 @@ export function rubPerHour(piecework: number, hours: number): number {
   return roundMoney(piecework / hours);
 }
 
+export function shopSalary(
+  workers: Worker[],
+  orders: Order[],
+  attendance: AttendanceDay[],
+  rates: Rates,
+  monthKey: string,
+  monthHours: MonthHoursMap = {}
+): ShopSalary {
+  const monthOrders = orders.filter((o) => o.monthKey === monthKey);
+  const totals = sumOrders(monthOrders, rates);
+
+  const workersRows: WorkerSalary[] = workers.map((worker) => {
+    const orderTotals = sumOrders(
+      monthOrders.filter((o) => o.workerId === worker.id),
+      rates
+    );
+    const hours = resolveMonthHours(
+      worker.id,
+      monthKey,
+      attendance,
+      monthHours
+    );
+    return {
+      worker,
+      orderTotals,
+      hours,
+      rubPerHour: 0,
+      pay: 0,
+    };
+  });
+
+  const totalHours = roundMoney(
+    workersRows.reduce((acc, row) => acc + row.hours, 0)
+  );
+  const rate = rubPerHour(totals.salary, totalHours);
+
+  const workersWithPay = workersRows.map((row) => ({
+    ...row,
+    rubPerHour: rate,
+    pay: roundMoney(row.hours * rate),
+  }));
+
+  return {
+    totals,
+    totalHours,
+    rubPerHour: rate,
+    workers: workersWithPay,
+  };
+}
+
+/** @deprecated use shopSalary — kept for older imports */
 export function workerSalary(
   worker: Worker,
   orders: Order[],
@@ -60,22 +124,23 @@ export function workerSalary(
   monthKey: string,
   monthHours: MonthHoursMap = {}
 ): WorkerSalary {
-  const monthOrders = orders.filter(
-    (o) => o.workerId === worker.id && o.monthKey === monthKey
-  );
-  const totals = sumOrders(monthOrders, rates);
-  const hours = resolveMonthHours(
-    worker.id,
-    monthKey,
+  const shop = shopSalary(
+    [worker],
+    orders,
     attendance,
+    rates,
+    monthKey,
     monthHours
   );
-  return {
-    worker,
-    totals,
-    hours,
-    rubPerHour: rubPerHour(totals.salary, hours),
-  };
+  return (
+    shop.workers[0] ?? {
+      worker,
+      orderTotals: emptyTotals(),
+      hours: 0,
+      rubPerHour: 0,
+      pay: 0,
+    }
+  );
 }
 
 export function allWorkersSalary(
@@ -86,9 +151,14 @@ export function allWorkersSalary(
   monthKey: string,
   monthHours: MonthHoursMap = {}
 ): WorkerSalary[] {
-  return workers.map((w) =>
-    workerSalary(w, orders, attendance, rates, monthKey, monthHours)
-  );
+  return shopSalary(
+    workers,
+    orders,
+    attendance,
+    rates,
+    monthKey,
+    monthHours
+  ).workers;
 }
 
 export { emptyTotals, calcOrderPay };

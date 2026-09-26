@@ -28,6 +28,8 @@ export function createInitialState(): UchetState {
     orders: [],
     attendance: [],
     monthHours: {},
+    removedOrderIds: [],
+    removedWorkerIds: [],
     selectedWorkerId: null,
     selectedMonthKey: currentMonthKey(),
   };
@@ -96,21 +98,36 @@ function normalizeState(
     net: Number(parsed.rates?.net) || DEFAULT_RATES.net,
   };
 
-  const workers = Array.isArray(parsed.workers)
-    ? parsed.workers.filter(isWorker)
-    : [];
-
-  const orders = Array.isArray(parsed.orders)
-    ? parsed.orders.filter(isOrder)
-    : [];
-
-  const attendance = Array.isArray(parsed.attendance)
-    ? normalizeAttendance(parsed.attendance)
-    : [];
-
   const monthHours = normalizeMonthHours(
     (parsed as Partial<UchetState>).monthHours
   );
+
+  const removedOrderIds = normalizeIdList(
+    (parsed as Partial<UchetState>).removedOrderIds
+  );
+  const removedWorkerIds = normalizeIdList(
+    (parsed as Partial<UchetState>).removedWorkerIds
+  );
+
+  const workers = Array.isArray(parsed.workers)
+    ? parsed.workers.filter(isWorker).filter((w) => !removedWorkerIds.includes(w.id))
+    : [];
+
+  const orders = Array.isArray(parsed.orders)
+    ? parsed.orders
+        .filter(isOrder)
+        .filter(
+          (o) =>
+            !removedOrderIds.includes(o.id) &&
+            !removedWorkerIds.includes(o.workerId)
+        )
+    : [];
+
+  const attendance = Array.isArray(parsed.attendance)
+    ? normalizeAttendance(parsed.attendance).filter(
+        (a) => !removedWorkerIds.includes(a.workerId)
+      )
+    : [];
 
   const selectedWorkerId =
     workers.find((w) => w.id === parsed.selectedWorkerId)?.id ??
@@ -124,6 +141,8 @@ function normalizeState(
     orders,
     attendance,
     monthHours,
+    removedOrderIds,
+    removedWorkerIds,
     selectedWorkerId,
     selectedMonthKey:
       typeof parsed.selectedMonthKey === "string" &&
@@ -131,6 +150,13 @@ function normalizeState(
         ? parsed.selectedMonthKey
         : currentMonthKey(),
   };
+}
+
+function normalizeIdList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(
+    new Set(raw.filter((id): id is string => typeof id === "string" && id.length > 0))
+  );
 }
 
 function normalizeMonthHours(raw: unknown): MonthHoursMap {

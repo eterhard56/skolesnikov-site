@@ -12,9 +12,9 @@ import {
 } from "react";
 import { sumOrders, type Totals } from "./calc";
 import {
-  allWorkersSalary,
   resolveMonthHours,
-  rubPerHour,
+  shopSalary,
+  type ShopSalary,
   type WorkerSalary,
 } from "./salary";
 import {
@@ -48,8 +48,14 @@ interface UchetContextValue {
   monthHours: number;
   /** Hours summed from calendar days only */
   calendarHours: number;
+  /** Shop-wide ₽/hour (all orders ÷ all hours) */
   monthRubPerHour: number;
+  /** Selected worker pay = hours × shop ₽/hour */
+  workerPay: number;
+  shop: ShopSalary;
   workersSalary: WorkerSalary[];
+  /** All orders in selected month (shop pool) */
+  shopTotals: Totals;
   setMonth: (monthKey: string) => void;
   setWorker: (workerId: string) => void;
   addWorker: (name: string) => void;
@@ -94,6 +100,8 @@ function mergeRemoteKeepingSelection(
   return {
     ...remote,
     monthHours: remote.monthHours ?? {},
+    removedOrderIds: remote.removedOrderIds ?? [],
+    removedWorkerIds: remote.removedWorkerIds ?? [],
     selectedWorkerId,
     selectedMonthKey: local.selectedMonthKey || remote.selectedMonthKey,
   };
@@ -106,6 +114,8 @@ function businessFingerprint(state: UchetState): string {
     orders: state.orders,
     attendance: state.attendance,
     monthHours: state.monthHours ?? {},
+    removedOrderIds: state.removedOrderIds ?? [],
+    removedWorkerIds: state.removedWorkerIds ?? [],
   });
 }
 
@@ -217,6 +227,24 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       try {
         const pushed = await pushCloudState(stateRef.current);
         cloudUpdatedAt.current = pushed.updatedAt;
+        // Apply server-merged state so this device picks up others' orders
+        if (pushed.state) {
+          skipNextSave.current = true;
+          setState((local) => ({
+            ...pushed.state,
+            monthHours: pushed.state.monthHours ?? {},
+            removedOrderIds: pushed.state.removedOrderIds ?? [],
+            removedWorkerIds: pushed.state.removedWorkerIds ?? [],
+            selectedWorkerId:
+              pushed.state.workers.find((w) => w.id === local.selectedWorkerId)
+                ?.id ??
+              pushed.state.selectedWorkerId ??
+              pushed.state.workers[0]?.id ??
+              null,
+            selectedMonthKey: local.selectedMonthKey,
+          }));
+          saveState(pushed.state);
+        }
         setSyncStatus("saved");
         setSyncError(null);
       } catch {
@@ -333,14 +361,9 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     state.monthHours,
   ]);
 
-  const monthRubPerHour = useMemo(
-    () => rubPerHour(totals.salary, monthHours),
-    [totals.salary, monthHours]
-  );
-
-  const workersSalary = useMemo(
+  const shop = useMemo(
     () =>
-      allWorkersSalary(
+      shopSalary(
         state.workers,
         state.orders,
         state.attendance,
@@ -358,6 +381,14 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     ]
   );
 
+  const monthRubPerHour = shop.rubPerHour;
+  const workersSalary = shop.workers;
+  const workerPay = useMemo(() => {
+    const row = workersSalary.find((w) => w.worker.id === state.selectedWorkerId);
+    return row?.pay ?? 0;
+  }, [workersSalary, state.selectedWorkerId]);
+  const shopTotals = shop.totals;
+
   const value: UchetContextValue = {
     ready,
     syncStatus,
@@ -369,7 +400,10 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     monthHours,
     calendarHours: Math.round((calendarHours + Number.EPSILON) * 100) / 100,
     monthRubPerHour,
+    workerPay,
+    shop,
     workersSalary,
+    shopTotals,
     setMonth: (monthKey) => update((s) => ({ ...s, selectedMonthKey: monthKey })),
     setWorker: (workerId) => update((s) => ({ ...s, selectedWorkerId: workerId })),
     addWorker: (name) =>
@@ -405,6 +439,9 @@ export function UchetProvider({ children }: { children: ReactNode }) {
           orders: s.orders.filter((o) => o.workerId !== id),
           attendance: s.attendance.filter((a) => a.workerId !== id),
           monthHours: monthHoursNext,
+          removedWorkerIds: Array.from(
+            new Set([...(s.removedWorkerIds ?? []), id])
+          ),
           selectedWorkerId:
             s.selectedWorkerId === id
               ? workers[0]?.id ?? null
@@ -436,6 +473,9 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       update((s) => ({
         ...s,
         orders: s.orders.filter((o) => o.id !== id),
+        removedOrderIds: Array.from(
+          new Set([...(s.removedOrderIds ?? []), id])
+        ),
       })),
     setDayHours: (date, hours) =>
       update((s) => {
@@ -475,7 +515,12 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       }),
     updateRates: (rates) => update((s) => ({ ...s, rates })),
     replaceState: (next) =>
-      setState({ ...next, monthHours: next.monthHours ?? {} }),
+      setState({
+        ...next,
+        monthHours: next.monthHours ?? {},
+        removedOrderIds: next.removedOrderIds ?? [],
+        removedWorkerIds: next.removedWorkerIds ?? [],
+      }),
     resetAll: () => setState(createInitialState()),
     refreshFromCloud,
   };
