@@ -5,7 +5,14 @@ import {
   sumOrders,
   type Totals,
 } from "./calc";
-import type { AttendanceDay, Order, Rates, Worker } from "./types";
+import type {
+  AttendanceDay,
+  MonthHoursMap,
+  Order,
+  Rates,
+  Worker,
+} from "./types";
+import { monthHoursKey } from "./types";
 
 export interface WorkerSalary {
   worker: Worker;
@@ -21,6 +28,25 @@ export function sumHours(days: AttendanceDay[]): number {
   );
 }
 
+export function resolveMonthHours(
+  workerId: string,
+  monthKey: string,
+  attendance: AttendanceDay[],
+  monthHours: MonthHoursMap
+): number {
+  const key = monthHoursKey(workerId, monthKey);
+  if (Object.prototype.hasOwnProperty.call(monthHours, key)) {
+    const override = monthHours[key];
+    if (Number.isFinite(override) && override >= 0) {
+      return roundMoney(override);
+    }
+  }
+  const monthDays = attendance.filter(
+    (a) => a.workerId === workerId && a.date.startsWith(monthKey)
+  );
+  return sumHours(monthDays);
+}
+
 export function rubPerHour(piecework: number, hours: number): number {
   if (!hours || hours <= 0) return 0;
   return roundMoney(piecework / hours);
@@ -31,16 +57,19 @@ export function workerSalary(
   orders: Order[],
   attendance: AttendanceDay[],
   rates: Rates,
-  monthKey: string
+  monthKey: string,
+  monthHours: MonthHoursMap = {}
 ): WorkerSalary {
   const monthOrders = orders.filter(
     (o) => o.workerId === worker.id && o.monthKey === monthKey
   );
-  const monthDays = attendance.filter(
-    (a) => a.workerId === worker.id && a.date.startsWith(monthKey)
-  );
   const totals = sumOrders(monthOrders, rates);
-  const hours = sumHours(monthDays);
+  const hours = resolveMonthHours(
+    worker.id,
+    monthKey,
+    attendance,
+    monthHours
+  );
   return {
     worker,
     totals,
@@ -54,10 +83,11 @@ export function allWorkersSalary(
   orders: Order[],
   attendance: AttendanceDay[],
   rates: Rates,
-  monthKey: string
+  monthKey: string,
+  monthHours: MonthHoursMap = {}
 ): WorkerSalary[] {
   return workers.map((w) =>
-    workerSalary(w, orders, attendance, rates, monthKey)
+    workerSalary(w, orders, attendance, rates, monthKey, monthHours)
   );
 }
 

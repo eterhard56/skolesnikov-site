@@ -42,14 +42,23 @@ export interface AttendanceDay {
   hours: number;
 }
 
+/** Month total hours keyed by `${workerId}:${monthKey}` */
+export type MonthHoursMap = Record<string, number>;
+
 export interface UchetState {
-  version: 2;
+  version: 3;
   rates: Rates;
   workers: Worker[];
   orders: Order[];
   attendance: AttendanceDay[];
+  /** Direct month hour totals (override / manual entry) */
+  monthHours: MonthHoursMap;
   selectedWorkerId: string | null;
   selectedMonthKey: string;
+}
+
+export function monthHoursKey(workerId: string, monthKey: string): string {
+  return `${workerId}:${monthKey}`;
 }
 
 export const DEFAULT_RATES: Rates = {

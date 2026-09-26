@@ -24,6 +24,7 @@ import { WorkersPanel } from "./WorkersPanel";
 import { RatesPanel } from "./RatesPanel";
 import { LiveTotalsBar } from "./LiveTotalsBar";
 import { SyncStatusBadge } from "./SyncStatusBadge";
+import { WorkerPicker } from "./WorkerPicker";
 import { useRouter } from "next/navigation";
 
 const TABS: Array<{ id: UchetTab; label: string; icon: typeof ClipboardList }> = [
@@ -110,26 +111,16 @@ export function UchetApp() {
             </button>
           </div>
 
-          <label className="flex flex-1 flex-col justify-center rounded-2xl border border-uchet-line bg-white/80 px-4 py-2 shadow-sm backdrop-blur">
-            <span className="text-[10px] uppercase tracking-[0.16em] text-uchet-muted">
+          <label className="flex flex-1 flex-col justify-center rounded-2xl border border-uchet-line bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+            <span className="mb-2 text-[10px] uppercase tracking-[0.16em] text-uchet-muted">
               Рабочий
             </span>
-            <select
-              value={state.selectedWorkerId ?? ""}
-              onChange={(e) => setWorker(e.target.value)}
-              className="mt-0.5 w-full appearance-none bg-transparent font-display text-base font-semibold text-uchet-ink outline-none"
-              disabled={!ready || state.workers.length === 0}
-            >
-              {state.workers.length === 0 ? (
-                <option value="">Добавьте рабочего</option>
-              ) : (
-                state.workers.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))
-              )}
-            </select>
+            <WorkerPicker
+              workers={state.workers}
+              selectedId={state.selectedWorkerId}
+              onSelect={setWorker}
+              disabled={!ready}
+            />
           </label>
         </div>
 

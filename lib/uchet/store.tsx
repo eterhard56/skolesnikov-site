@@ -13,8 +13,8 @@ import {
 import { sumOrders, type Totals } from "./calc";
 import {
   allWorkersSalary,
+  resolveMonthHours,
   rubPerHour,
-  sumHours,
   type WorkerSalary,
 } from "./salary";
 import {
@@ -35,6 +35,7 @@ import type {
   UchetState,
   Worker,
 } from "./types";
+import { monthHoursKey } from "./types";
 
 interface UchetContextValue {
   ready: boolean;
@@ -45,6 +46,8 @@ interface UchetContextValue {
   totals: Totals;
   selectedWorker: Worker | null;
   monthHours: number;
+  /** Hours summed from calendar days only */
+  calendarHours: number;
   monthRubPerHour: number;
   workersSalary: WorkerSalary[];
   setMonth: (monthKey: string) => void;
@@ -66,6 +69,8 @@ interface UchetContextValue {
   removeOrder: (id: string) => void;
   setDayHours: (date: string, hours: number | null) => void;
   getDayHours: (date: string) => number | null;
+  /** Set total hours for selected worker + month (manual) */
+  setMonthTotalHours: (hours: number | null) => void;
   updateRates: (rates: Rates) => void;
   replaceState: (next: UchetState) => void;
   resetAll: () => void;
@@ -77,10 +82,31 @@ const UchetContext = createContext<UchetContextValue | null>(null);
 const SAVE_DEBOUNCE_MS = 700;
 const POLL_MS = 25_000;
 
-function stateFingerprint(state: UchetState): string {
-  // Ignore pure UI selection for equality against cloud if needed later;
-  // for now sync full state including selection.
-  return JSON.stringify(state);
+function mergeRemoteKeepingSelection(
+  remote: UchetState,
+  local: UchetState
+): UchetState {
+  const selectedWorkerId =
+    remote.workers.find((w) => w.id === local.selectedWorkerId)?.id ??
+    remote.selectedWorkerId ??
+    remote.workers[0]?.id ??
+    null;
+  return {
+    ...remote,
+    monthHours: remote.monthHours ?? {},
+    selectedWorkerId,
+    selectedMonthKey: local.selectedMonthKey || remote.selectedMonthKey,
+  };
+}
+
+function businessFingerprint(state: UchetState): string {
+  return JSON.stringify({
+    rates: state.rates,
+    workers: state.workers,
+    orders: state.orders,
+    attendance: state.attendance,
+    monthHours: state.monthHours ?? {},
+  });
 }
 
 export function UchetProvider({ children }: { children: ReactNode }) {
@@ -100,8 +126,8 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       const remote = await fetchCloudState();
       if (remote.state) {
         skipNextSave.current = true;
-        setState(remote.state);
-        saveState(remote.state);
+        setState((local) => mergeRemoteKeepingSelection(remote.state!, local));
+        saveState(mergeRemoteKeepingSelection(remote.state, stateRef.current));
         cloudUpdatedAt.current = remote.updatedAt;
       }
       setSyncStatus("saved");
@@ -132,17 +158,18 @@ export function UchetProvider({ children }: { children: ReactNode }) {
 
         if (remote.state) {
           skipNextSave.current = true;
-          setState(remote.state);
-          saveState(remote.state);
+          const merged = mergeRemoteKeepingSelection(remote.state, local);
+          setState(merged);
+          saveState(merged);
           cloudUpdatedAt.current = remote.updatedAt;
           setSyncStatus("saved");
           setSyncError(null);
         } else if (
           local.workers.length > 0 ||
           local.orders.length > 0 ||
-          local.attendance.length > 0
+          local.attendance.length > 0 ||
+          Object.keys(local.monthHours ?? {}).length > 0
         ) {
-          // First cloud save: migrate local browser data up
           setSyncStatus("saving");
           const pushed = await pushCloudState(local);
           if (cancelled) return;
@@ -218,13 +245,16 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         ) {
           return;
         }
-        if (stateFingerprint(remote.state) === stateFingerprint(stateRef.current)) {
+        if (
+          businessFingerprint(remote.state) ===
+          businessFingerprint(stateRef.current)
+        ) {
           cloudUpdatedAt.current = remote.updatedAt;
           return;
         }
         skipNextSave.current = true;
-        setState(remote.state);
-        saveState(remote.state);
+        setState((local) => mergeRemoteKeepingSelection(remote.state!, local));
+        saveState(mergeRemoteKeepingSelection(remote.state, stateRef.current));
         cloudUpdatedAt.current = remote.updatedAt;
         setSyncStatus("saved");
         setSyncError(null);
@@ -280,10 +310,28 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     );
   }, [state.attendance, state.selectedWorkerId, state.selectedMonthKey]);
 
-  const monthHours = useMemo(
-    () => sumHours(attendanceForMonth),
-    [attendanceForMonth]
-  );
+  const calendarHours = useMemo(() => {
+    const sum = attendanceForMonth.reduce(
+      (acc, d) => acc + (Number.isFinite(d.hours) ? d.hours : 0),
+      0
+    );
+    return Math.round((sum + Number.EPSILON) * 100) / 100;
+  }, [attendanceForMonth]);
+
+  const monthHours = useMemo(() => {
+    if (!state.selectedWorkerId) return 0;
+    return resolveMonthHours(
+      state.selectedWorkerId,
+      state.selectedMonthKey,
+      state.attendance,
+      state.monthHours ?? {}
+    );
+  }, [
+    state.selectedWorkerId,
+    state.selectedMonthKey,
+    state.attendance,
+    state.monthHours,
+  ]);
 
   const monthRubPerHour = useMemo(
     () => rubPerHour(totals.salary, monthHours),
@@ -297,7 +345,8 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         state.orders,
         state.attendance,
         state.rates,
-        state.selectedMonthKey
+        state.selectedMonthKey,
+        state.monthHours ?? {}
       ),
     [
       state.workers,
@@ -305,6 +354,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       state.attendance,
       state.rates,
       state.selectedMonthKey,
+      state.monthHours,
     ]
   );
 
@@ -317,6 +367,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     totals,
     selectedWorker,
     monthHours,
+    calendarHours: Math.round((calendarHours + Number.EPSILON) * 100) / 100,
     monthRubPerHour,
     workersSalary,
     setMonth: (monthKey) => update((s) => ({ ...s, selectedMonthKey: monthKey })),
@@ -344,11 +395,16 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     removeWorker: (id) =>
       update((s) => {
         const workers = s.workers.filter((w) => w.id !== id);
+        const monthHoursNext = { ...(s.monthHours ?? {}) };
+        for (const key of Object.keys(monthHoursNext)) {
+          if (key.startsWith(`${id}:`)) delete monthHoursNext[key];
+        }
         return {
           ...s,
           workers,
           orders: s.orders.filter((o) => o.workerId !== id),
           attendance: s.attendance.filter((a) => a.workerId !== id),
+          monthHours: monthHoursNext,
           selectedWorkerId:
             s.selectedWorkerId === id
               ? workers[0]?.id ?? null
@@ -405,8 +461,21 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       );
       return day ? day.hours : null;
     },
+    setMonthTotalHours: (hours) =>
+      update((s) => {
+        if (!s.selectedWorkerId) return s;
+        const key = monthHoursKey(s.selectedWorkerId, s.selectedMonthKey);
+        const next = { ...(s.monthHours ?? {}) };
+        if (hours === null || !Number.isFinite(hours) || hours < 0) {
+          delete next[key];
+        } else {
+          next[key] = Math.round(hours * 100) / 100;
+        }
+        return { ...s, monthHours: next };
+      }),
     updateRates: (rates) => update((s) => ({ ...s, rates })),
-    replaceState: (next) => setState(next),
+    replaceState: (next) =>
+      setState({ ...next, monthHours: next.monthHours ?? {} }),
     resetAll: () => setState(createInitialState()),
     refreshFromCloud,
   };

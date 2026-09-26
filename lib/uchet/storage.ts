@@ -3,6 +3,7 @@ import {
   DEFAULT_SHIFT_HOURS,
   type AttendanceDay,
   type AttendanceStatus,
+  type MonthHoursMap,
   type Order,
   type Rates,
   type UchetState,
@@ -21,11 +22,12 @@ export function createId(prefix: string): string {
 
 export function createInitialState(): UchetState {
   return {
-    version: 2,
+    version: 3,
     rates: { ...DEFAULT_RATES },
     workers: [],
     orders: [],
     attendance: [],
+    monthHours: {},
     selectedWorkerId: null,
     selectedMonthKey: currentMonthKey(),
   };
@@ -106,17 +108,22 @@ function normalizeState(
     ? normalizeAttendance(parsed.attendance)
     : [];
 
+  const monthHours = normalizeMonthHours(
+    (parsed as Partial<UchetState>).monthHours
+  );
+
   const selectedWorkerId =
     workers.find((w) => w.id === parsed.selectedWorkerId)?.id ??
     workers[0]?.id ??
     null;
 
   return {
-    version: 2,
+    version: 3,
     rates,
     workers,
     orders,
     attendance,
+    monthHours,
     selectedWorkerId,
     selectedMonthKey:
       typeof parsed.selectedMonthKey === "string" &&
@@ -124,6 +131,17 @@ function normalizeState(
         ? parsed.selectedMonthKey
         : currentMonthKey(),
   };
+}
+
+function normalizeMonthHours(raw: unknown): MonthHoursMap {
+  if (!raw || typeof raw !== "object") return {};
+  const result: MonthHoursMap = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const n = typeof value === "number" ? value : Number(value);
+    if (!key.includes(":") || !Number.isFinite(n) || n < 0) continue;
+    result[key] = Math.round(n * 100) / 100;
+  }
+  return result;
 }
 
 function isWorker(v: unknown): v is Worker {
