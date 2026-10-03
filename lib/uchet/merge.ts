@@ -1,5 +1,6 @@
 import type {
   AttendanceDay,
+  ExtraWork,
   MonthHoursMap,
   Order,
   UchetState,
@@ -61,8 +62,10 @@ export function mergeUchetStates(
   if (!remote) {
     return {
       ...incoming,
+      extras: incoming.extras ?? [],
       monthHours: incoming.monthHours ?? {},
       removedOrderIds: uniqStrings(incoming.removedOrderIds ?? []),
+      removedExtraIds: uniqStrings(incoming.removedExtraIds ?? []),
       removedWorkerIds: uniqStrings(incoming.removedWorkerIds ?? []),
     };
   }
@@ -71,6 +74,12 @@ export function mergeUchetStates(
     uniqStrings([
       ...(remote.removedOrderIds ?? []),
       ...(incoming.removedOrderIds ?? []),
+    ])
+  );
+  const removedExtraIds = new Set(
+    uniqStrings([
+      ...(remote.removedExtraIds ?? []),
+      ...(incoming.removedExtraIds ?? []),
     ])
   );
   const removedWorkerIds = new Set(
@@ -92,6 +101,14 @@ export function mergeUchetStates(
     removedOrderIds
   ).filter(
     (o) => !removedOrderIds.has(o.id) && !removedWorkerIds.has(o.workerId)
+  );
+
+  const extras = mergeById(
+    remote.extras ?? [],
+    incoming.extras ?? [],
+    removedExtraIds
+  ).filter(
+    (e) => !removedExtraIds.has(e.id) && !removedWorkerIds.has(e.workerId)
   );
 
   const attendance = mergeAttendance(
@@ -121,9 +138,11 @@ export function mergeUchetStates(
     rates: incoming.rates ?? remote.rates,
     workers,
     orders,
+    extras,
     attendance,
     monthHours,
     removedOrderIds: Array.from(removedOrderIds),
+    removedExtraIds: Array.from(removedExtraIds),
     removedWorkerIds: Array.from(removedWorkerIds),
     selectedWorkerId,
     selectedMonthKey: incoming.selectedMonthKey || remote.selectedMonthKey,

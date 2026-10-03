@@ -2,11 +2,13 @@ import {
   calcOrderPay,
   emptyTotals,
   roundMoney,
+  sumExtras,
   sumOrders,
   type Totals,
 } from "./calc";
 import type {
   AttendanceDay,
+  ExtraWork,
   MonthHoursMap,
   Order,
   Rates,
@@ -16,7 +18,7 @@ import { monthHoursKey } from "./types";
 
 export interface WorkerSalary {
   worker: Worker;
-  /** Personal orders totals (for info) */
+  /** Personal orders + extras totals (for info) */
   orderTotals: Totals;
   hours: number;
   /** Shop-wide ₽/hour for the month */
@@ -26,7 +28,7 @@ export interface WorkerSalary {
 }
 
 export interface ShopSalary {
-  /** All orders in month (any worker) */
+  /** All orders + extras in month (any worker) */
   totals: Totals;
   /** Sum of hours across all workers */
   totalHours: number;
@@ -71,15 +73,19 @@ export function shopSalary(
   attendance: AttendanceDay[],
   rates: Rates,
   monthKey: string,
-  monthHours: MonthHoursMap = {}
+  monthHours: MonthHoursMap = {},
+  extras: ExtraWork[] = []
 ): ShopSalary {
   const monthOrders = orders.filter((o) => o.monthKey === monthKey);
-  const totals = sumOrders(monthOrders, rates);
+  const monthExtras = extras.filter((e) => e.monthKey === monthKey);
+  const totals = sumExtras(monthExtras, sumOrders(monthOrders, rates));
 
   const workersRows: WorkerSalary[] = workers.map((worker) => {
-    const orderTotals = sumOrders(
-      monthOrders.filter((o) => o.workerId === worker.id),
-      rates
+    const workerOrders = monthOrders.filter((o) => o.workerId === worker.id);
+    const workerExtras = monthExtras.filter((e) => e.workerId === worker.id);
+    const orderTotals = sumExtras(
+      workerExtras,
+      sumOrders(workerOrders, rates)
     );
     const hours = resolveMonthHours(
       worker.id,
@@ -122,7 +128,8 @@ export function workerSalary(
   attendance: AttendanceDay[],
   rates: Rates,
   monthKey: string,
-  monthHours: MonthHoursMap = {}
+  monthHours: MonthHoursMap = {},
+  extras: ExtraWork[] = []
 ): WorkerSalary {
   const shop = shopSalary(
     [worker],
@@ -130,7 +137,8 @@ export function workerSalary(
     attendance,
     rates,
     monthKey,
-    monthHours
+    monthHours,
+    extras
   );
   return (
     shop.workers[0] ?? {
@@ -149,7 +157,8 @@ export function allWorkersSalary(
   attendance: AttendanceDay[],
   rates: Rates,
   monthKey: string,
-  monthHours: MonthHoursMap = {}
+  monthHours: MonthHoursMap = {},
+  extras: ExtraWork[] = []
 ): WorkerSalary[] {
   return shopSalary(
     workers,
@@ -157,7 +166,8 @@ export function allWorkersSalary(
     attendance,
     rates,
     monthKey,
-    monthHours
+    monthHours,
+    extras
   ).workers;
 }
 

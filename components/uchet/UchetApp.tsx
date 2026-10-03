@@ -18,6 +18,8 @@ import { useUchet } from "@/lib/uchet/store";
 import { UCHET_LOGIN_PATH } from "@/lib/uchet/auth-routes";
 import { OrderForm } from "./OrderForm";
 import { OrdersList } from "./OrdersList";
+import { ExtraWorkForm } from "./ExtraWorkForm";
+import { ExtraWorksList } from "./ExtraWorksList";
 import { AttendanceSheet } from "./AttendanceSheet";
 import { SalaryPanel } from "./SalaryPanel";
 import { WorkersPanel } from "./WorkersPanel";
@@ -186,6 +188,8 @@ export function UchetApp() {
                 <>
                   <OrderForm />
                   <OrdersList />
+                  <ExtraWorkForm />
+                  <ExtraWorksList />
                 </>
               )}
               {tab === "attendance" && <AttendanceSheet />}

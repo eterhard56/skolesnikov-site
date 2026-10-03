@@ -92,7 +92,10 @@ export function OrdersList() {
                 colSpan={6}
                 className="px-3 pb-3 text-right text-xs text-uchet-muted"
               >
-                к выплате {formatMoney(totals.salary)}
+                заказы {formatMoney(totals.salary - totals.fromExtras)}
+                {totals.fromExtras > 0
+                  ? ` · с доп. ${formatMoney(totals.salary)}`
+                  : ""}
               </td>
             </tr>
           </tfoot>

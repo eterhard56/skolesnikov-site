@@ -40,8 +40,19 @@ export function SalaryPanel() {
             value={shop.totalHours > 0 ? formatMoney(monthRubPerHour) : "—"}
             accent
           />
-          <InfoCard label="Заказов" value={String(shopTotals.orderCount)} />
+          <InfoCard
+            label="Заказы / доп."
+            value={`${shopTotals.orderCount} / ${shopTotals.extraCount}`}
+          />
         </div>
+        {shopTotals.fromExtras > 0 && (
+          <p className="mt-3 text-xs text-uchet-muted">
+            В том числе доп. работы:{" "}
+            <span className="font-semibold tabular-nums text-uchet-ink">
+              {formatMoney(shopTotals.fromExtras)}
+            </span>
+          </p>
+        )}
       </section>
 
       {selectedWorker && (
@@ -140,8 +151,11 @@ export function SalaryPanel() {
                         ) : null}
                       </p>
                       <p className="text-xs text-uchet-muted">
-                        заказов: {row.orderTotals.orderCount} ·{" "}
-                        {formatArea(row.orderTotals.area)} м²
+                        заказов: {row.orderTotals.orderCount}
+                        {row.orderTotals.extraCount > 0
+                          ? ` · доп.: ${row.orderTotals.extraCount}`
+                          : ""}{" "}
+                        · {formatArea(row.orderTotals.area)} м²
                       </p>
                     </div>
                     <div className="text-left sm:text-right">

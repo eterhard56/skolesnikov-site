@@ -7,8 +7,10 @@ export interface Totals {
   fromArea: number;
   fromNets: number;
   fromLocks: number;
+  fromExtras: number;
   salary: number;
   orderCount: number;
+  extraCount: number;
 }
 
 export function emptyTotals(): Totals {
@@ -19,8 +21,10 @@ export function emptyTotals(): Totals {
     fromArea: 0,
     fromNets: 0,
     fromLocks: 0,
+    fromExtras: 0,
     salary: 0,
     orderCount: 0,
+    extraCount: 0,
   };
 }
 
@@ -49,6 +53,20 @@ export function sumOrders(orders: Order[], rates: Rates): Totals {
     acc.orderCount += 1;
     return acc;
   }, emptyTotals());
+}
+
+export function sumExtras(
+  extras: Array<{ amount: number }>,
+  base: Totals = emptyTotals()
+): Totals {
+  const next = { ...base };
+  for (const extra of extras) {
+    const amount = Number.isFinite(extra.amount) ? Math.max(0, extra.amount) : 0;
+    next.fromExtras = roundMoney(next.fromExtras + amount);
+    next.salary = roundMoney(next.salary + amount);
+    next.extraCount += 1;
+  }
+  return next;
 }
 
 export function roundMoney(n: number): number {

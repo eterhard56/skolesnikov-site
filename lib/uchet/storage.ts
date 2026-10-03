@@ -3,6 +3,7 @@ import {
   DEFAULT_SHIFT_HOURS,
   type AttendanceDay,
   type AttendanceStatus,
+  type ExtraWork,
   type MonthHoursMap,
   type Order,
   type Rates,
@@ -26,9 +27,11 @@ export function createInitialState(): UchetState {
     rates: { ...DEFAULT_RATES },
     workers: [],
     orders: [],
+    extras: [],
     attendance: [],
     monthHours: {},
     removedOrderIds: [],
+    removedExtraIds: [],
     removedWorkerIds: [],
     selectedWorkerId: null,
     selectedMonthKey: currentMonthKey(),
@@ -105,6 +108,9 @@ function normalizeState(
   const removedOrderIds = normalizeIdList(
     (parsed as Partial<UchetState>).removedOrderIds
   );
+  const removedExtraIds = normalizeIdList(
+    (parsed as Partial<UchetState>).removedExtraIds
+  );
   const removedWorkerIds = normalizeIdList(
     (parsed as Partial<UchetState>).removedWorkerIds
   );
@@ -120,6 +126,16 @@ function normalizeState(
           (o) =>
             !removedOrderIds.includes(o.id) &&
             !removedWorkerIds.includes(o.workerId)
+        )
+    : [];
+
+  const extras = Array.isArray((parsed as Partial<UchetState>).extras)
+    ? ((parsed as Partial<UchetState>).extras as unknown[])
+        .filter(isExtra)
+        .filter(
+          (e) =>
+            !removedExtraIds.includes(e.id) &&
+            !removedWorkerIds.includes(e.workerId)
         )
     : [];
 
@@ -139,9 +155,11 @@ function normalizeState(
     rates,
     workers,
     orders,
+    extras,
     attendance,
     monthHours,
     removedOrderIds,
+    removedExtraIds,
     removedWorkerIds,
     selectedWorkerId,
     selectedMonthKey:
@@ -187,6 +205,19 @@ function isOrder(v: unknown): v is Order {
     typeof o.area === "number" &&
     typeof o.nets === "number" &&
     typeof o.locks === "number"
+  );
+}
+
+function isExtra(v: unknown): v is ExtraWork {
+  if (!v || typeof v !== "object") return false;
+  const e = v as ExtraWork;
+  return (
+    typeof e.id === "string" &&
+    typeof e.workerId === "string" &&
+    typeof e.monthKey === "string" &&
+    typeof e.title === "string" &&
+    typeof e.amount === "number" &&
+    Number.isFinite(e.amount)
   );
 }
 

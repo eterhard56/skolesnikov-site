@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { sumOrders, type Totals } from "./calc";
+import { sumExtras, sumOrders, type Totals } from "./calc";
 import {
   resolveMonthHours,
   shopSalary,
@@ -30,6 +30,7 @@ import {
 } from "./sync-client";
 import type {
   AttendanceDay,
+  ExtraWork,
   Order,
   Rates,
   UchetState,
@@ -43,18 +44,19 @@ interface UchetContextValue {
   syncError: string | null;
   state: UchetState;
   filteredOrders: Order[];
+  filteredExtras: ExtraWork[];
   totals: Totals;
   selectedWorker: Worker | null;
   monthHours: number;
   /** Hours summed from calendar days only */
   calendarHours: number;
-  /** Shop-wide ₽/hour (all orders ÷ all hours) */
+  /** Shop-wide ₽/hour (all works ÷ all hours) */
   monthRubPerHour: number;
   /** Selected worker pay = hours × shop ₽/hour */
   workerPay: number;
   shop: ShopSalary;
   workersSalary: WorkerSalary[];
-  /** All orders in selected month (shop pool) */
+  /** All orders + extras in selected month (shop pool) */
   shopTotals: Totals;
   setMonth: (monthKey: string) => void;
   setWorker: (workerId: string) => void;
@@ -73,6 +75,12 @@ interface UchetContextValue {
     patch: Partial<Omit<Order, "id" | "createdAt">>
   ) => void;
   removeOrder: (id: string) => void;
+  addExtra: (input: { title: string; amount: number }) => void;
+  updateExtra: (
+    id: string,
+    patch: Partial<Omit<ExtraWork, "id" | "createdAt">>
+  ) => void;
+  removeExtra: (id: string) => void;
   setDayHours: (date: string, hours: number | null) => void;
   getDayHours: (date: string) => number | null;
   /** Set total hours for selected worker + month (manual) */
@@ -88,22 +96,31 @@ const UchetContext = createContext<UchetContextValue | null>(null);
 const SAVE_DEBOUNCE_MS = 700;
 const POLL_MS = 25_000;
 
+function withExtrasDefaults(state: UchetState): UchetState {
+  return {
+    ...state,
+    extras: state.extras ?? [],
+    monthHours: state.monthHours ?? {},
+    removedOrderIds: state.removedOrderIds ?? [],
+    removedExtraIds: state.removedExtraIds ?? [],
+    removedWorkerIds: state.removedWorkerIds ?? [],
+  };
+}
+
 function mergeRemoteKeepingSelection(
   remote: UchetState,
   local: UchetState
 ): UchetState {
+  const base = withExtrasDefaults(remote);
   const selectedWorkerId =
-    remote.workers.find((w) => w.id === local.selectedWorkerId)?.id ??
-    remote.selectedWorkerId ??
-    remote.workers[0]?.id ??
+    base.workers.find((w) => w.id === local.selectedWorkerId)?.id ??
+    base.selectedWorkerId ??
+    base.workers[0]?.id ??
     null;
   return {
-    ...remote,
-    monthHours: remote.monthHours ?? {},
-    removedOrderIds: remote.removedOrderIds ?? [],
-    removedWorkerIds: remote.removedWorkerIds ?? [],
+    ...base,
     selectedWorkerId,
-    selectedMonthKey: local.selectedMonthKey || remote.selectedMonthKey,
+    selectedMonthKey: local.selectedMonthKey || base.selectedMonthKey,
   };
 }
 
@@ -112,9 +129,11 @@ function businessFingerprint(state: UchetState): string {
     rates: state.rates,
     workers: state.workers,
     orders: state.orders,
+    extras: state.extras ?? [],
     attendance: state.attendance,
     monthHours: state.monthHours ?? {},
     removedOrderIds: state.removedOrderIds ?? [],
+    removedExtraIds: state.removedExtraIds ?? [],
     removedWorkerIds: state.removedWorkerIds ?? [],
   });
 }
@@ -177,6 +196,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         } else if (
           local.workers.length > 0 ||
           local.orders.length > 0 ||
+          (local.extras ?? []).length > 0 ||
           local.attendance.length > 0 ||
           Object.keys(local.monthHours ?? {}).length > 0
         ) {
@@ -230,20 +250,19 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         // Apply server-merged state so this device picks up others' orders
         if (pushed.state) {
           skipNextSave.current = true;
-          setState((local) => ({
-            ...pushed.state,
-            monthHours: pushed.state.monthHours ?? {},
-            removedOrderIds: pushed.state.removedOrderIds ?? [],
-            removedWorkerIds: pushed.state.removedWorkerIds ?? [],
-            selectedWorkerId:
-              pushed.state.workers.find((w) => w.id === local.selectedWorkerId)
-                ?.id ??
-              pushed.state.selectedWorkerId ??
-              pushed.state.workers[0]?.id ??
-              null,
-            selectedMonthKey: local.selectedMonthKey,
-          }));
-          saveState(pushed.state);
+          setState((local) => {
+            const base = withExtrasDefaults(pushed.state!);
+            return {
+              ...base,
+              selectedWorkerId:
+                base.workers.find((w) => w.id === local.selectedWorkerId)?.id ??
+                base.selectedWorkerId ??
+                base.workers[0]?.id ??
+                null,
+              selectedMonthKey: local.selectedMonthKey,
+            };
+          });
+          saveState(withExtrasDefaults(pushed.state));
         }
         setSyncStatus("saved");
         setSyncError(null);
@@ -322,9 +341,20 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }, [state.orders, state.selectedWorkerId, state.selectedMonthKey]);
 
+  const filteredExtras = useMemo(() => {
+    if (!state.selectedWorkerId) return [];
+    return (state.extras ?? [])
+      .filter(
+        (e) =>
+          e.workerId === state.selectedWorkerId &&
+          e.monthKey === state.selectedMonthKey
+      )
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [state.extras, state.selectedWorkerId, state.selectedMonthKey]);
+
   const totals = useMemo(
-    () => sumOrders(filteredOrders, state.rates),
-    [filteredOrders, state.rates]
+    () => sumExtras(filteredExtras, sumOrders(filteredOrders, state.rates)),
+    [filteredOrders, filteredExtras, state.rates]
   );
 
   const selectedWorker =
@@ -369,7 +399,8 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         state.attendance,
         state.rates,
         state.selectedMonthKey,
-        state.monthHours ?? {}
+        state.monthHours ?? {},
+        state.extras ?? []
       ),
     [
       state.workers,
@@ -378,6 +409,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
       state.rates,
       state.selectedMonthKey,
       state.monthHours,
+      state.extras,
     ]
   );
 
@@ -395,6 +427,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
     syncError,
     state,
     filteredOrders,
+    filteredExtras,
     totals,
     selectedWorker,
     monthHours,
@@ -437,6 +470,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
           ...s,
           workers,
           orders: s.orders.filter((o) => o.workerId !== id),
+          extras: (s.extras ?? []).filter((e) => e.workerId !== id),
           attendance: s.attendance.filter((a) => a.workerId !== id),
           monthHours: monthHoursNext,
           removedWorkerIds: Array.from(
@@ -477,6 +511,44 @@ export function UchetProvider({ children }: { children: ReactNode }) {
           new Set([...(s.removedOrderIds ?? []), id])
         ),
       })),
+    addExtra: (input) =>
+      update((s) => {
+        if (!s.selectedWorkerId) return s;
+        const amount = Math.max(0, Math.round(input.amount * 100) / 100);
+        if (!input.title.trim() || amount <= 0) return s;
+        const extra: ExtraWork = {
+          id: createId("x"),
+          workerId: s.selectedWorkerId,
+          monthKey: s.selectedMonthKey,
+          title: input.title.trim(),
+          amount,
+          createdAt: new Date().toISOString(),
+        };
+        return { ...s, extras: [...(s.extras ?? []), extra] };
+      }),
+    updateExtra: (id, patch) =>
+      update((s) => ({
+        ...s,
+        extras: (s.extras ?? []).map((e) => {
+          if (e.id !== id) return e;
+          const next = { ...e, ...patch };
+          if (typeof next.amount === "number") {
+            next.amount = Math.max(0, Math.round(next.amount * 100) / 100);
+          }
+          if (typeof next.title === "string") {
+            next.title = next.title.trim() || e.title;
+          }
+          return next;
+        }),
+      })),
+    removeExtra: (id) =>
+      update((s) => ({
+        ...s,
+        extras: (s.extras ?? []).filter((e) => e.id !== id),
+        removedExtraIds: Array.from(
+          new Set([...(s.removedExtraIds ?? []), id])
+        ),
+      })),
     setDayHours: (date, hours) =>
       update((s) => {
         if (!s.selectedWorkerId) return s;
@@ -514,13 +586,7 @@ export function UchetProvider({ children }: { children: ReactNode }) {
         return { ...s, monthHours: next };
       }),
     updateRates: (rates) => update((s) => ({ ...s, rates })),
-    replaceState: (next) =>
-      setState({
-        ...next,
-        monthHours: next.monthHours ?? {},
-        removedOrderIds: next.removedOrderIds ?? [],
-        removedWorkerIds: next.removedWorkerIds ?? [],
-      }),
+    replaceState: (next) => setState(withExtrasDefaults(next)),
     resetAll: () => setState(createInitialState()),
     refreshFromCloud,
   };

@@ -31,6 +31,17 @@ export interface Order {
   createdAt: string;
 }
 
+/** Free-form extra work with a ruble amount (переделка, металл, и т.п.) */
+export interface ExtraWork {
+  id: string;
+  workerId: string;
+  monthKey: string;
+  title: string;
+  /** Amount in rubles */
+  amount: number;
+  createdAt: string;
+}
+
 /** @deprecated kept for migration from older localStorage */
 export type AttendanceStatus = "present" | "absent" | "half" | "off";
 
@@ -50,11 +61,13 @@ export interface UchetState {
   rates: Rates;
   workers: Worker[];
   orders: Order[];
+  extras: ExtraWork[];
   attendance: AttendanceDay[];
   /** Direct month hour totals (override / manual entry) */
   monthHours: MonthHoursMap;
   /** Tombstones so deletes survive multi-device merge */
   removedOrderIds: string[];
+  removedExtraIds: string[];
   removedWorkerIds: string[];
   selectedWorkerId: string | null;
   selectedMonthKey: string;

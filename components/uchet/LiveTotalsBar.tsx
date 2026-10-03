@@ -66,6 +66,7 @@ export function LiveTotalsBar() {
         <div className="flex items-baseline justify-between gap-3 border-t border-white/10 pt-3 sm:block sm:border-0 sm:pt-0 sm:text-right">
           <p className="text-[11px] uppercase tracking-[0.18em] text-uchet-mist/70">
             Работы цеха · {display.orderCount} зак.
+            {display.extraCount > 0 ? ` · ${display.extraCount} доп.` : ""}
           </p>
           <AnimatePresence mode="wait">
             <motion.p
@@ -82,6 +83,9 @@ export function LiveTotalsBar() {
           <p className="mt-0.5 hidden text-[11px] text-uchet-mist/55 sm:block">
             {state.rates.sqm}₽/м² · {state.rates.lock}₽ замок · {state.rates.net}₽
             сетка
+            {display.fromExtras > 0
+              ? ` · доп. ${formatMoney(display.fromExtras)}`
+              : ""}
           </p>
         </div>
       </div>
